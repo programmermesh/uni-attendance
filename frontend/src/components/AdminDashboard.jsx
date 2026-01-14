@@ -36,7 +36,14 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { API_URL } from "./config";
-import { Card, Button, SuccessScreen, ToastProvider, useToast, Label } from "./Shared";
+import {
+  Card,
+  Button,
+  SuccessScreen,
+  ToastProvider,
+  useToast,
+  Label,
+} from "./Shared";
 
 // ============================================================================
 // STYLING COMPONENTS (Unchanged)
@@ -531,7 +538,11 @@ function DashboardOverview() {
         </div>
       </div>
 
-      <Card title="Student Directory" subtitle="Manage university students" className="w-full">
+      <Card
+        title="Student Directory"
+        subtitle="Manage university students"
+        className="w-full"
+      >
         <div className="p-5 border-b border-gray-200 bg-gray-50/50">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
             <div className="md:col-span-4 relative">
@@ -602,19 +613,32 @@ function DashboardOverview() {
                 </tr>
               ) : (
                 currentItems.map((s) => (
-                  <tr key={s.id} className="hover:bg-blue-50/50 transition-colors">
-                    <td className="px-6 py-4 font-medium text-gray-900">{s.lastName} {s.firstName}</td>
-                    <td className="px-6 py-4 font-mono text-xs text-gray-500">{s.matricNumber}</td>
+                  <tr
+                    key={s.id}
+                    className="hover:bg-blue-50/50 transition-colors"
+                  >
+                    <td className="px-6 py-4 font-medium text-gray-900">
+                      {s.lastName} {s.firstName}
+                    </td>
+                    <td className="px-6 py-4 font-mono text-xs text-gray-500">
+                      {s.matricNumber}
+                    </td>
                     <td className="px-6 py-4">
                       <span className="text-[10px] font-bold text-gray-700 block truncate max-w-[150px]">
-                        {typeof s.faculty === "object" ? s.faculty?.name : s.faculty}
+                        {typeof s.faculty === "object"
+                          ? s.faculty?.name
+                          : s.faculty}
                       </span>
                       <span className="text-[10px] text-gray-400 block truncate max-w-[150px]">
-                        {typeof s.department === "object" ? s.department?.name : s.department}
+                        {typeof s.department === "object"
+                          ? s.department?.name
+                          : s.department}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-center">
-                      <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded text-[10px] font-bold">{s.level}</span>
+                      <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded text-[10px] font-bold">
+                        {s.level}
+                      </span>
                     </td>
                     <td className="px-6 py-4 text-right">
                       <button
@@ -658,26 +682,87 @@ function DashboardOverview() {
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-zoom-in">
             <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-blue-50/50">
-              <h3 className="text-xl font-bold text-gray-900">Edit Student Info</h3>
-              <button onClick={() => setEditingStudent(null)} className="p-2 text-gray-400"><X size={20} /></button>
+              <h3 className="text-xl font-bold text-gray-900">
+                Edit Student Info
+              </h3>
+              <button
+                onClick={() => setEditingStudent(null)}
+                className="p-2 text-gray-400"
+              >
+                <X size={20} />
+              </button>
             </div>
             <form onSubmit={handleUpdateStudent} className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-4">
-                <FormInput label="First Name" value={editingStudent.firstName} onChange={(e) => setEditingStudent({ ...editingStudent, firstName: e.target.value })} />
-                <FormInput label="Last Name" value={editingStudent.lastName} onChange={(e) => setEditingStudent({ ...editingStudent, lastName: e.target.value })} />
+                <FormInput
+                  label="First Name"
+                  value={editingStudent.firstName}
+                  onChange={(e) =>
+                    setEditingStudent({
+                      ...editingStudent,
+                      firstName: e.target.value,
+                    })
+                  }
+                />
+                <FormInput
+                  label="Last Name"
+                  value={editingStudent.lastName}
+                  onChange={(e) =>
+                    setEditingStudent({
+                      ...editingStudent,
+                      lastName: e.target.value,
+                    })
+                  }
+                />
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <FormSelect label="Level" value={editingStudent.level} onChange={(e) => setEditingStudent({ ...editingStudent, level: e.target.value })}>
-                  <option>100</option><option>200</option><option>300</option><option>400</option><option>500</option><option>600</option><option>PGC</option>
+                <FormSelect
+                  label="Level"
+                  value={editingStudent.level}
+                  onChange={(e) =>
+                    setEditingStudent({
+                      ...editingStudent,
+                      level: e.target.value,
+                    })
+                  }
+                >
+                  <option>100</option>
+                  <option>200</option>
+                  <option>300</option>
+                  <option>400</option>
+                  <option>500</option>
+                  <option>600</option>
+                  <option>PGC</option>
                 </FormSelect>
-                <FormSelect label="Sex" value={editingStudent.sex} onChange={(e) => setEditingStudent({ ...editingStudent, sex: e.target.value })}>
+                <FormSelect
+                  label="Sex"
+                  value={editingStudent.sex}
+                  onChange={(e) =>
+                    setEditingStudent({
+                      ...editingStudent,
+                      sex: e.target.value,
+                    })
+                  }
+                >
                   <option value="Male">Male</option>
                   <option value="Female">Female</option>
                 </FormSelect>
               </div>
               <div className="pt-4 flex gap-3">
-                <button type="button" onClick={() => setEditingStudent(null)} className="flex-1 py-3 text-sm font-bold text-gray-500 bg-gray-100 rounded-xl">Cancel</button>
-                <Button type="submit" loading={saving} colorClass="bg-blue-600 hover:bg-blue-700 flex-1">Save Changes</Button>
+                <button
+                  type="button"
+                  onClick={() => setEditingStudent(null)}
+                  className="flex-1 py-3 text-sm font-bold text-gray-500 bg-gray-100 rounded-xl"
+                >
+                  Cancel
+                </button>
+                <Button
+                  type="submit"
+                  loading={saving}
+                  colorClass="bg-blue-600 hover:bg-blue-700 flex-1"
+                >
+                  Save Changes
+                </Button>
               </div>
             </form>
           </div>
@@ -688,9 +773,13 @@ function DashboardOverview() {
 }
 
 const MetricCard = ({ label, value, icon, color }) => (
-  <div className={`p-6 rounded-2xl border ${color} flex flex-col justify-between h-28 md:h-32 shadow-sm`}>
+  <div
+    className={`p-6 rounded-2xl border ${color} flex flex-col justify-between h-28 md:h-32 shadow-sm`}
+  >
     <div className="flex justify-between items-start">
-      <div className="text-gray-500 font-medium text-xs md:text-sm">{label}</div>
+      <div className="text-gray-500 font-medium text-xs md:text-sm">
+        {label}
+      </div>
       <div className="p-2 bg-white rounded-lg shadow-sm">{icon}</div>
     </div>
     <div className="text-2xl md:text-3xl font-bold text-gray-800">{value}</div>
@@ -731,14 +820,18 @@ function LecturerList() {
   };
 
   useEffect(() => {
-    axios.get(`${API_URL}/meta/faculties-list`).then((res) => setFaculties(res.data));
+    axios
+      .get(`${API_URL}/meta/faculties-list`)
+      .then((res) => setFaculties(res.data));
     fetchLecturers();
   }, []);
 
   useEffect(() => {
     if (selectedFacId) {
-      axios.get(`${API_URL}/meta/departments-list?facultyId=${selectedFacId}`)
-        .then((res) => setDepartments(res.data)).catch(() => setDepartments([]));
+      axios
+        .get(`${API_URL}/meta/departments-list?facultyId=${selectedFacId}`)
+        .then((res) => setDepartments(res.data))
+        .catch(() => setDepartments([]));
     } else {
       setDepartments([]);
       setSelectedDeptId("");
@@ -748,12 +841,16 @@ function LecturerList() {
   // ✅ FIXED: Fetch departments when the FACULTY in the EDIT MODAL changes
   useEffect(() => {
     if (editingLecturer?.faculty) {
-      const selectedFac = faculties.find(f => f.name === editingLecturer.faculty || f.id === editingLecturer.faculty);
+      const selectedFac = faculties.find(
+        (f) =>
+          f.name === editingLecturer.faculty || f.id === editingLecturer.faculty
+      );
       const facId = selectedFac ? selectedFac.id : null;
 
       if (facId) {
-        axios.get(`${API_URL}/meta/departments-list?facultyId=${facId}`)
-          .then(res => setModalDepartments(res.data))
+        axios
+          .get(`${API_URL}/meta/departments-list?facultyId=${facId}`)
+          .then((res) => setModalDepartments(res.data))
           .catch(() => setModalDepartments([]));
       }
     } else {
@@ -761,12 +858,16 @@ function LecturerList() {
     }
   }, [editingLecturer?.faculty, faculties]);
 
-  useEffect(() => { setCurrentPage(1); }, [searchTerm, selectedFacId, selectedDeptId]);
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedFacId, selectedDeptId]);
 
   const filteredLecturers = allLecturers.filter((l) => {
     const fullName = `${l.title} ${l.firstName} ${l.lastName}`.toLowerCase();
-    const matchesSearch = fullName.includes(searchTerm.toLowerCase()) || l.email.toLowerCase().includes(searchTerm.toLowerCase());
-    
+    const matchesSearch =
+      fullName.includes(searchTerm.toLowerCase()) ||
+      l.email.toLowerCase().includes(searchTerm.toLowerCase());
+
     const facName = faculties.find((f) => f.id === selectedFacId)?.name;
     const deptName = departments.find((d) => d.id === selectedDeptId)?.name;
 
@@ -778,14 +879,20 @@ function LecturerList() {
 
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentItems = filteredLecturers.slice(indexOfFirstItem, indexOfLastItem);
+  const currentItems = filteredLecturers.slice(
+    indexOfFirstItem,
+    indexOfLastItem
+  );
   const totalPages = Math.ceil(filteredLecturers.length / itemsPerPage);
 
   const handleUpdateLecturer = async (e) => {
     e.preventDefault();
     setSaving(true);
     try {
-      await axios.patch(`${API_URL}/admin/lecturer/${editingLecturer.id}`, editingLecturer);
+      await axios.patch(
+        `${API_URL}/admin/lecturer/${editingLecturer.id}`,
+        editingLecturer
+      );
       toast.success("Lecturer updated successfully");
       setEditingLecturer(null);
       fetchLecturers();
@@ -798,26 +905,52 @@ function LecturerList() {
 
   return (
     <div className="space-y-6 animate-fade-in-up">
-      <Card title="Lecturer Directory" subtitle="Manage university lecturers" className="w-full">
+      <Card
+        title="Lecturer Directory"
+        subtitle="Manage university lecturers"
+        className="w-full"
+      >
         <div className="mb-8 grid grid-cols-1 md:grid-cols-12 gap-4 bg-gray-50 p-4 rounded-2xl border border-gray-100">
           <div className="md:col-span-4 relative">
-             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-             <input 
-               type="text" placeholder="Search..." 
-               className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-xl outline-none focus:border-blue-500 bg-white"
-               value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
-             />
+            <Search
+              size={16}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+            />
+            <input
+              type="text"
+              placeholder="Search..."
+              className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-xl outline-none focus:border-blue-500 bg-white"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
           </div>
           <div className="md:col-span-4">
-            <select className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl bg-white" value={selectedFacId} onChange={(e) => setSelectedFacId(e.target.value)}>
+            <select
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl bg-white"
+              value={selectedFacId}
+              onChange={(e) => setSelectedFacId(e.target.value)}
+            >
               <option value="">All Faculties</option>
-              {faculties.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+              {faculties.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name}
+                </option>
+              ))}
             </select>
           </div>
           <div className="md:col-span-4">
-            <select className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl bg-white" disabled={!selectedFacId} value={selectedDeptId} onChange={(e) => setSelectedDeptId(e.target.value)}>
+            <select
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl bg-white"
+              disabled={!selectedFacId}
+              value={selectedDeptId}
+              onChange={(e) => setSelectedDeptId(e.target.value)}
+            >
               <option value="">All Departments</option>
-              {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+              {departments.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
             </select>
           </div>
         </div>
@@ -834,21 +967,43 @@ function LecturerList() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {loading ? (
-                <tr><td colSpan="4" className="p-10 text-center"><Loader2 className="animate-spin inline text-blue-600" /></td></tr>
+                <tr>
+                  <td colSpan="4" className="p-10 text-center">
+                    <Loader2 className="animate-spin inline text-blue-600" />
+                  </td>
+                </tr>
               ) : (
                 currentItems.map((l) => (
-                  <tr key={l.id} className="bg-white hover:bg-blue-50/50 transition-colors group">
+                  <tr
+                    key={l.id}
+                    className="bg-white hover:bg-blue-50/50 transition-colors group"
+                  >
                     <td className="px-6 py-4">
-                       <div className="font-bold text-gray-900">{l.title} {l.firstName} {l.lastName}</div>
-                       <div className="text-[10px] text-gray-400 uppercase">ID: {l.id.split("-")[0]}</div>
+                      <div className="font-bold text-gray-900">
+                        {l.title} {l.firstName} {l.lastName}
+                      </div>
+                      <div className="text-[10px] text-gray-400 uppercase">
+                        ID: {l.id.split("-")[0]}
+                      </div>
                     </td>
                     <td className="px-6 py-4">
-                       <div className="text-gray-700 font-medium">{l.faculty}</div>
-                       <div className="text-[10px] text-gray-400">{l.department}</div>
+                      <div className="text-gray-700 font-medium">
+                        {l.faculty}
+                      </div>
+                      <div className="text-[10px] text-gray-400">
+                        {l.department}
+                      </div>
                     </td>
-                    <td className="px-6 py-4 font-mono text-xs text-blue-600">{l.email}</td>
+                    <td className="px-6 py-4 font-mono text-xs text-blue-600">
+                      {l.email}
+                    </td>
                     <td className="px-6 py-4 text-right">
-                       <button onClick={() => setEditingLecturer({ ...l })} className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg"><Settings size={18} /></button>
+                      <button
+                        onClick={() => setEditingLecturer({ ...l })}
+                        className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg"
+                      >
+                        <Settings size={18} />
+                      </button>
                     </td>
                   </tr>
                 ))
@@ -858,10 +1013,24 @@ function LecturerList() {
         </div>
 
         <div className="p-4 flex justify-between items-center bg-gray-50 border-t border-gray-100 rounded-b-2xl">
-          <p className="text-[10px] font-bold text-gray-400 uppercase">Page {currentPage} of {totalPages || 1}</p>
+          <p className="text-[10px] font-bold text-gray-400 uppercase">
+            Page {currentPage} of {totalPages || 1}
+          </p>
           <div className="flex gap-2">
-            <button disabled={currentPage === 1} onClick={() => setCurrentPage((p) => p - 1)} className="p-2 bg-white rounded-lg border border-gray-200 disabled:opacity-50"><ArrowLeft size={16} /></button>
-            <button disabled={currentPage === totalPages || totalPages === 0} onClick={() => setCurrentPage((p) => p + 1)} className="p-2 bg-white rounded-lg border border-gray-200 disabled:opacity-50"><ArrowRight size={16} /></button>
+            <button
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage((p) => p - 1)}
+              className="p-2 bg-white rounded-lg border border-gray-200 disabled:opacity-50"
+            >
+              <ArrowLeft size={16} />
+            </button>
+            <button
+              disabled={currentPage === totalPages || totalPages === 0}
+              onClick={() => setCurrentPage((p) => p + 1)}
+              className="p-2 bg-white rounded-lg border border-gray-200 disabled:opacity-50"
+            >
+              <ArrowRight size={16} />
+            </button>
           </div>
         </div>
       </Card>
@@ -870,46 +1039,123 @@ function LecturerList() {
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-zoom-in">
             <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-blue-50/50">
-              <h3 className="text-xl font-bold text-gray-900">Edit Staff Info</h3>
-              <button onClick={() => setEditingLecturer(null)} className="p-2 text-gray-400 hover:text-red-500"><X size={20} /></button>
+              <h3 className="text-xl font-bold text-gray-900">
+                Edit Staff Info
+              </h3>
+              <button
+                onClick={() => setEditingLecturer(null)}
+                className="p-2 text-gray-400 hover:text-red-500"
+              >
+                <X size={20} />
+              </button>
             </div>
             <form onSubmit={handleUpdateLecturer} className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-4">
-                <FormSelect label="Title" value={editingLecturer.title} onChange={(e) => setEditingLecturer({ ...editingLecturer, title: e.target.value })}>
-                  <option>Dr.</option><option>Prof.</option><option>Mr.</option><option>Mrs.</option>
+                <FormSelect
+                  label="Title"
+                  value={editingLecturer.title}
+                  onChange={(e) =>
+                    setEditingLecturer({
+                      ...editingLecturer,
+                      title: e.target.value,
+                    })
+                  }
+                >
+                  <option>Dr.</option>
+                  <option>Prof.</option>
+                  <option>Mr.</option>
+                  <option>Mrs.</option>
                 </FormSelect>
-                <FormInput label="Email Address" value={editingLecturer.email} onChange={(e) => setEditingLecturer({ ...editingLecturer, email: e.target.value })} />
+                <FormInput
+                  label="Email Address"
+                  value={editingLecturer.email}
+                  onChange={(e) =>
+                    setEditingLecturer({
+                      ...editingLecturer,
+                      email: e.target.value,
+                    })
+                  }
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                <FormInput label="First Name" value={editingLecturer.firstName} onChange={(e) => setEditingLecturer({ ...editingLecturer, firstName: e.target.value })} />
-                <FormInput label="Last Name" value={editingLecturer.lastName} onChange={(e) => setEditingLecturer({ ...editingLecturer, lastName: e.target.value })} />
+                <FormInput
+                  label="First Name"
+                  value={editingLecturer.firstName}
+                  onChange={(e) =>
+                    setEditingLecturer({
+                      ...editingLecturer,
+                      firstName: e.target.value,
+                    })
+                  }
+                />
+                <FormInput
+                  label="Last Name"
+                  value={editingLecturer.lastName}
+                  onChange={(e) =>
+                    setEditingLecturer({
+                      ...editingLecturer,
+                      lastName: e.target.value,
+                    })
+                  }
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <FormSelect
                   label="Faculty"
                   value={editingLecturer.faculty}
-                  onChange={(e) => setEditingLecturer({ ...editingLecturer, faculty: e.target.value, department: "" })}
+                  onChange={(e) =>
+                    setEditingLecturer({
+                      ...editingLecturer,
+                      faculty: e.target.value,
+                      department: "",
+                    })
+                  }
                 >
                   <option value="">Select Faculty</option>
-                  {faculties.map((f) => <option key={f.id} value={f.name}>{f.name}</option>)}
+                  {faculties.map((f) => (
+                    <option key={f.id} value={f.name}>
+                      {f.name}
+                    </option>
+                  ))}
                 </FormSelect>
 
                 <FormSelect
                   label="Department"
                   value={editingLecturer.department}
                   disabled={!editingLecturer.faculty}
-                  onChange={(e) => setEditingLecturer({ ...editingLecturer, department: e.target.value })}
+                  onChange={(e) =>
+                    setEditingLecturer({
+                      ...editingLecturer,
+                      department: e.target.value,
+                    })
+                  }
                 >
                   <option value="">Select Department</option>
-                  {modalDepartments.map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}
+                  {modalDepartments.map((d) => (
+                    <option key={d.id} value={d.name}>
+                      {d.name}
+                    </option>
+                  ))}
                 </FormSelect>
               </div>
 
               <div className="pt-4 flex gap-3">
-                <button type="button" onClick={() => setEditingLecturer(null)} className="flex-1 py-3 text-xs font-bold text-gray-500 bg-gray-100 rounded-xl">Cancel</button>
-                <Button type="submit" loading={saving} colorClass="bg-blue-600 hover:bg-blue-700 flex-1">Save Profile</Button>
+                <button
+                  type="button"
+                  onClick={() => setEditingLecturer(null)}
+                  className="flex-1 py-3 text-xs font-bold text-gray-500 bg-gray-100 rounded-xl"
+                >
+                  Cancel
+                </button>
+                <Button
+                  type="submit"
+                  loading={saving}
+                  colorClass="bg-blue-600 hover:bg-blue-700 flex-1"
+                >
+                  Save Profile
+                </Button>
               </div>
             </form>
           </div>
@@ -1455,8 +1701,9 @@ function ManageCourses({ currentUser }) {
   const toast = useToast();
 
   const [form, setForm] = useState({
-    courseCode: "", // e.g. CSC 101
-    courseTitle: "", // e.g. Intro to CS
+    courseCode: "",
+    courseTitle: "",
+    groupName: "Group A",
     lecturerId: currentUser.id,
     faculty: currentUser.faculty || "",
     department: currentUser.department || "",
@@ -1645,167 +1892,301 @@ function ManageCourses({ currentUser }) {
 }
 
 // ============================================================================
-// LECTURER ACTIONS (Search Code -> Type to Find Title)
+// LECTURER ACTIONS (Filterable + Paginated)
 // ============================================================================
 function LecturerActions({ currentUser }) {
   const toast = useToast();
   const [classes, setClasses] = useState([]);
-  const [selectedCleanCode, setSelectedCleanCode] = useState("");
+  const [faculties, setFaculties] = useState([]);
+  const [departments, setDepartments] = useState([]);
+
+  // Selection & Pagination States
+  const [selFac, setSelFac] = useState("");
+  const [selDept, setSelDept] = useState("");
   const [selectedClassId, setSelectedClassId] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5; 
+
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
-  
-  const [codeSearchTerm, setCodeSearchTerm] = useState("");
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
-  // 1. Fetch Classes (Refreshes the isActive status from DB)
-  const fetchClasses = async () => {
-    if (currentUser.id) {
-      try {
-        const res = await axios.get(`${API_URL}/meta/classes?lecturerId=${currentUser.id}`);
-        setClasses(res.data);
-      } catch (err) { console.error("Data fetch failed"); }
+  // 1. Initial Load
+  const fetchData = async () => {
+    try {
+      const [classRes, facRes] = await Promise.all([
+        axios.get(`${API_URL}/meta/classes?lecturerId=${currentUser.id}`),
+        axios.get(`${API_URL}/meta/faculties-list`),
+      ]);
+      setClasses(classRes.data);
+      setFaculties(facRes.data);
+    } catch (err) {
+      console.error("Data fetch failed", err);
     }
   };
 
-  useEffect(() => { fetchClasses(); }, [currentUser]);
+  useEffect(() => {
+    fetchData();
+  }, [currentUser.id]);
 
-  const normalizeCode = (str) => (!str ? "" : str.replace(/[^a-zA-Z0-9]/g, "").toUpperCase());
-
-  // --- Search Filter Logic ---
-  const uniqueCodeMap = new Map();
-  classes.forEach((c) => {
-    const rawCode = c.courseCode || c.course || "";
-    const clean = normalizeCode(rawCode);
-    if (clean.includes(normalizeCode(codeSearchTerm))) {
-      if (!uniqueCodeMap.has(clean)) uniqueCodeMap.set(clean, rawCode);
+  // 2. Load Departments
+  useEffect(() => {
+    if (selFac) {
+      axios
+        .get(`${API_URL}/meta/departments-list?facultyId=${selFac}`)
+        .then((res) => setDepartments(res.data))
+        .catch(() => setDepartments([]));
+    } else {
+      setDepartments([]);
+      setSelDept("");
     }
+    setCurrentPage(1); 
+  }, [selFac]);
+
+  useEffect(() => {
+    setCurrentPage(1); 
+  }, [selDept]);
+
+  // 3. Filter & Pagination Logic
+  const filteredClasses = classes.filter((c) => {
+    const facultyMatch = selFac
+      ? c.faculty === faculties.find((f) => f.id === selFac)?.name ||
+        c.faculty === selFac
+      : true;
+    const deptMatch = selDept
+      ? c.department === departments.find((d) => d.id === selDept)?.name ||
+        c.department === selDept
+      : true;
+    return facultyMatch && deptMatch;
   });
-  const uniqueCodesList = Array.from(uniqueCodeMap.entries());
 
-  const handleSelectCode = (cleanCode, displayCode) => {
-    setCodeSearchTerm(displayCode);
-    setSelectedCleanCode(cleanCode);
-    setSelectedClassId("");
-    setIsDropdownOpen(false);
-  };
+  const totalPages = Math.ceil(filteredClasses.length / itemsPerPage);
+  const currentItems = filteredClasses.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
 
-  const displayedTitles = classes.filter(c => normalizeCode(c.courseCode || c.course) === selectedCleanCode);
   const currentCourse = classes.find((c) => c.id === selectedClassId);
 
-  // 🚀 ACTIVATE: Opens the "window" for students to mark attendance
   const activateClass = async () => {
+    if (!selectedClassId) return;
     setLoading(true);
-    navigator.geolocation.getCurrentPosition(async (pos) => {
-      try {
-        await axios.post(`${API_URL}/activate-session`, {
-          lectureId: selectedClassId,
-          topic: currentCourse.courseTitle, // Automatically use title
-          lat: pos.coords.latitude,
-          long: pos.coords.longitude,
-        });
-        setSuccess(true);
-        fetchClasses(); 
-      } catch (err) { toast.error("Activation Failed"); } 
-      finally { setLoading(false); }
-    }, () => { setLoading(false); toast.error("GPS required"); });
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          await axios.post(`${API_URL}/activate-session`, {
+            lectureId: selectedClassId,
+            topic: currentCourse.courseTitle,
+            lat: pos.coords.latitude,
+            long: pos.coords.longitude,
+          });
+          setSuccess(true);
+          fetchData();
+        } catch (err) {
+          toast.error("Activation Failed");
+        } finally {
+          setLoading(false);
+        }
+      },
+      () => {
+        setLoading(false);
+        toast.error("GPS required");
+      }
+    );
   };
 
-  // 🛑 END SESSION: Closes the "window" but doesn't lock the course for the day
   const endSession = async () => {
     setLoading(true);
     try {
-      await axios.post(`${API_URL}/deactivate-session`, { lectureId: selectedClassId });
-      toast.success("Session ended. You can start another one whenever needed.");
-      fetchClasses(); 
-    } catch (err) { toast.error("Failed to end session"); } 
-    finally { setLoading(false); }
+      await axios.post(`${API_URL}/deactivate-session`, {
+        lectureId: selectedClassId,
+      });
+      toast.success("Session ended.");
+      fetchData();
+    } catch (err) {
+      toast.error("Failed to end session");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  if (success) return (
-    <SuccessScreen 
-      title="Class Session Active" 
-      msg={`Students can now mark attendance for ${currentCourse?.courseTitle}`} 
-      onReset={() => { setSuccess(false); fetchClasses(); }} 
-    />
-  );
+  if (success)
+    return (
+      <SuccessScreen
+        title="Class Session Active"
+        msg={`Attendance is live for ${currentCourse?.courseTitle}`}
+        onReset={() => {
+          setSuccess(false);
+          fetchData();
+        }}
+      />
+    );
 
   return (
-    <Card title="Attendance Control" subtitle="Open or close course attendance" className="w-full">
+    <Card
+      title="Attendance Control"
+      subtitle="Select a course instance to manage"
+    >
       <div className="space-y-6">
-        
-        {/* 1. SEARCH COURSE CODE */}
-        <div className="relative z-20">
-          <label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-1.5 mb-1.5">
-             <BookOpen size={14} /> 1. Find Course Code
-          </label>
-          <div className="relative">
-            <input 
-              type="text" placeholder="e.g. CSC 101" 
-              className="w-full bg-white border border-gray-200 text-sm rounded-xl py-3.5 pl-10 pr-4 outline-none focus:border-blue-500 font-black uppercase shadow-sm"
-              value={codeSearchTerm} 
-              onChange={(e) => { setCodeSearchTerm(e.target.value); setIsDropdownOpen(true); setSelectedCleanCode(""); }} 
-              onFocus={() => setIsDropdownOpen(true)} 
-            />
-            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><Search size={18} /></div>
-          </div>
-          
-          {isDropdownOpen && uniqueCodesList.length > 0 && (
-            <div className="absolute w-full mt-2 bg-white border border-gray-100 rounded-xl shadow-2xl max-h-60 overflow-y-auto z-30">
-              {uniqueCodesList.map(([cleanCode, displayCode]) => (
-                <div key={cleanCode} onClick={() => handleSelectCode(cleanCode, displayCode)} className="p-4 cursor-pointer border-b border-gray-50 hover:bg-blue-50 transition-colors font-bold text-slate-700">
-                  {displayCode}
-                </div>
-              ))}
-            </div>
-          )}
+        {/* FILTERS */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+          <FormSelect
+            label="Filter Faculty"
+            icon={Building2}
+            value={selFac}
+            onChange={(e) => {
+              setSelFac(e.target.value);
+              setSelectedClassId("");
+            }}
+          >
+            <option value="">All My Faculties</option>
+            {faculties.map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.name}
+              </option>
+            ))}
+          </FormSelect>
+
+          <FormSelect
+            label="Filter Department"
+            icon={Users}
+            disabled={!selFac}
+            value={selDept}
+            onChange={(e) => {
+              setSelDept(e.target.value);
+              setSelectedClassId("");
+            }}
+          >
+            <option value="">All My Departments</option>
+            {departments.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+              </option>
+            ))}
+          </FormSelect>
         </div>
 
-        {/* 2. TITLE SELECTION */}
-        {selectedCleanCode && (
-          <div className="animate-fade-in-up space-y-3">
-             <label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-1.5 mb-1.5">
-               <Presentation size={14} /> 2. Select Course Title
+        {/* PAGINATED LIST */}
+        <div className="space-y-3">
+          <div className="flex justify-between items-center px-1">
+            <label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-1.5">
+              <BookOpen size={14} /> Course Instances ({filteredClasses.length})
             </label>
-            <div className="grid grid-cols-1 gap-2">
-              {displayedTitles.map((c) => (
+            {totalPages > 1 && (
+              <span className="text-[10px] font-black text-blue-600 uppercase">
+                Page {currentPage} of {totalPages}
+              </span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 gap-3">
+            {currentItems.length === 0 ? (
+              <div className="text-center py-10 border-2 border-dashed border-gray-100 rounded-2xl">
+                <p className="text-sm text-gray-400">
+                  No courses match your filters.
+                </p>
+              </div>
+            ) : (
+              currentItems.map((c) => (
                 <div
                   key={c.id}
                   onClick={() => setSelectedClassId(c.id)}
                   className={`p-4 rounded-2xl border transition-all flex items-center justify-between group cursor-pointer ${
-                    selectedClassId === c.id ? "bg-blue-50 border-blue-500 shadow-sm" : "bg-white border-gray-100 hover:border-blue-200"
+                    selectedClassId === c.id
+                      ? "bg-blue-50 border-blue-500 shadow-sm"
+                      : "bg-white border-gray-100 hover:border-blue-200"
                   }`}
                 >
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <h4 className={`font-bold text-sm ${selectedClassId === c.id ? "text-blue-900" : "text-slate-800"}`}>{c.courseTitle}</h4>
+                      <span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded uppercase">
+                        {c.courseCode}
+                      </span>
+                      <h4
+                        className={`font-bold text-sm ${
+                          selectedClassId === c.id
+                            ? "text-blue-900"
+                            : "text-slate-800"
+                        }`}
+                      >
+                        {c.courseTitle}
+                      </h4>
                       {c.isActive && (
-                        <span className="flex items-center gap-1 text-[8px] bg-red-100 text-red-600 px-2 py-0.5 rounded-full animate-pulse font-black uppercase tracking-tighter">
-                          <div className="w-1 h-1 bg-red-600 rounded-full" /> Live
+                        <span className="flex items-center gap-1 text-[8px] bg-red-100 text-red-600 px-2 py-0.5 rounded-full animate-pulse font-black uppercase">
+                          Live
                         </span>
                       )}
                     </div>
-                    <div className="text-[10px] text-slate-400 mt-1 font-medium">{c.level} Lvl • {c.semester} Sem</div>
+                    <p className="text-[10px] text-gray-400 mt-1 font-medium">
+                      {c.department} • {c.level} Level
+                    </p>
                   </div>
-                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${selectedClassId === c.id ? 'bg-blue-600 border-blue-600' : 'border-slate-200 group-hover:border-blue-300'}`}>
-                    {selectedClassId === c.id && <Check size={12} className="text-white" />}
+                  <div
+                    className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
+                      selectedClassId === c.id
+                        ? "bg-blue-600 border-blue-600"
+                        : "border-slate-200"
+                    }`}
+                  >
+                    {selectedClassId === c.id && (
+                      <Check size={12} className="text-white" />
+                    )}
                   </div>
                 </div>
-              ))}
-            </div>
+              ))
+            )}
           </div>
-        )}
 
-        {/* 3. DYNAMIC ACTION BUTTON */}
+          {/* PAGINATION CONTROLS */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-4 pt-2">
+              <button
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage((p) => p - 1)}
+                className="p-2 rounded-lg bg-gray-100 text-gray-600 disabled:opacity-30 hover:bg-gray-200 transition-colors"
+              >
+                <ArrowLeft size={16} />
+              </button>
+              <div className="flex gap-1">
+                {[...Array(totalPages)].map((_, i) => (
+                  <div
+                    key={i}
+                    className={`h-1.5 rounded-full transition-all ${
+                      currentPage === i + 1
+                        ? "w-6 bg-blue-600"
+                        : "w-1.5 bg-gray-300"
+                    }`}
+                  />
+                ))}
+              </div>
+              <button
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage((p) => p + 1)}
+                className="p-2 rounded-lg bg-gray-100 text-gray-600 disabled:opacity-30 hover:bg-gray-200 transition-colors"
+              >
+                <ArrowRight size={16} />
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* ACTION BUTTON */}
         {selectedClassId && (
           <div className="pt-4 border-t border-slate-100 animate-fade-in-up">
             {currentCourse?.isActive ? (
-              <Button onClick={endSession} loading={loading} colorClass="bg-red-600 hover:bg-red-700 w-full py-4 shadow-xl shadow-red-200 font-black tracking-wide">
-                 End Active Session
+              <Button
+                onClick={endSession}
+                loading={loading}
+                colorClass="bg-red-600 hover:bg-red-700 w-full py-4 shadow-xl shadow-red-200 font-black uppercase tracking-widest"
+              >
+                End Session
               </Button>
             ) : (
-              <Button onClick={activateClass} loading={loading} colorClass="bg-blue-600 hover:bg-blue-700 w-full py-4 shadow-xl shadow-blue-500/20 font-black tracking-wide">
-                Activate New Session
+              <Button
+                onClick={activateClass}
+                loading={loading}
+                colorClass="bg-blue-600 hover:bg-blue-700 w-full py-4 shadow-xl shadow-blue-500/20 font-black uppercase tracking-widest"
+              >
+                Start Session
               </Button>
             )}
           </div>
@@ -1937,85 +2318,36 @@ function ExamOfficerPortal() {
     }
   });
 
-  // 5. GENERATE REPORT (The Fix: Fetch All Variants & Merge)
-  const generateReport = async () => {
-    if (!filters.courseId) {
-      toast.error("Please select a course first.");
-      return;
-    }
-    setLoadingReport(true);
+ /// 5. GENERATE REPORT
+const generateReport = async () => {
+  if (!filters.courseId) {
+    toast.error("Please select a course first.");
+    return;
+  }
+  setLoadingReport(true);
 
-    // 1. Identify the normalized code (e.g. "CSC101")
-    const selectedCourse = availableCourses.find(
-      (c) => c.id === filters.courseId
-    );
-    const targetCleanCode = normalizeCode(
-      selectedCourse.courseCode || selectedCourse.course
-    );
+  try {
+    // ✅ Use 'lectureId' parameter to match the backend expectation
+    const res = await axios.get(`${API_URL}/admin/report?lectureId=${filters.courseId}`);
+    
+    const data = res.data;
 
-    // 2. Find ALL database variations that match this code (e.g. "CSC:101", "CSC 101")
-    const matchingVariants = availableCourses.filter(
-      (c) => normalizeCode(c.courseCode || c.course) === targetCleanCode
-    );
-
-    // 3. Extract unique strings to query the backend with
-    const uniqueQueryStrings = [
-      ...new Set(matchingVariants.map((c) => c.courseCode || c.course)),
-    ];
-
-    try {
-      // 4. Fetch reports for ALL variants in parallel
-      const responses = await Promise.all(
-        uniqueQueryStrings.map((q) =>
-          axios
-            .get(`${API_URL}/admin/report?course=${encodeURIComponent(q)}`)
-            .catch((e) => ({ data: { students: [] } }))
-        )
-      );
-
-      // 5. MERGE LOGIC
-      const studentMap = new Map();
-
-      responses.forEach((res) => {
-        const students = res.data?.students || [];
-        students.forEach((s) => {
-          if (studentMap.has(s.matricNumber)) {
-            // Student exists from another variant, combine stats
-            const existing = studentMap.get(s.matricNumber);
-            existing.attended += s.attended;
-            existing.total += s.total; // Assumes distinct sessions across variants
-            // Re-calculate percentage
-            existing.percentage = Math.round(
-              (existing.attended / existing.total) * 100
-            );
-            existing.isEligible = existing.percentage >= 70; // Re-check eligibility
-          } else {
-            // New student found
-            studentMap.set(s.matricNumber, { ...s });
-          }
-        });
-      });
-
-      const mergedStudents = Array.from(studentMap.values());
-
-      setReport({ students: mergedStudents });
-
-      if (mergedStudents.length === 0) {
-        toast.error(`No records found for ${uniqueQueryStrings.join(" or ")}`);
-      } else {
-        toast.success(
-          `Report Merged! Found records across ${uniqueQueryStrings.length} variation(s).`
-        );
-      }
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to generate report.");
+    // Check if the backend returned a list
+    if (!data.students || data.students.length === 0) {
+      toast.error("No one has marked attendance for this course yet.");
       setReport(null);
-    } finally {
-      setLoadingReport(false);
+    } else {
+      setReport(data);
+      toast.success("Report Generated!");
     }
-  };
-
+  } catch (err) {
+    console.error("Report Error:", err);
+    toast.error("Error connecting to server.");
+    setReport(null);
+  } finally {
+    setLoadingReport(false);
+  }
+};
   // 📥 EXCEL DOWNLOAD FUNCTION
   const downloadExcel = () => {
     if (!report || !report.students.length) {

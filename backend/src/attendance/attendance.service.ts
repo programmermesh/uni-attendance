@@ -1,5 +1,11 @@
 import { Faculty } from './../school/faculty.entity';
-import { Injectable, BadRequestException, Get, Query, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  Get,
+  Query,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
@@ -15,12 +21,13 @@ import { Lecturer } from './entities/lecturer.entity';
 import { Admin } from '../admin/admin.entity';
 import { ExamOfficer } from '../exam-officer/exam-officer.entity';
 import { Department } from '../school/department.entity';
-
+import { AttendanceSession } from './entities/attendanceSession.entity';
 
 @Injectable()
 export class AttendanceService {
   constructor(
-    @InjectRepository(Attendance) private attendanceRepo: Repository<Attendance>,
+    @InjectRepository(Attendance)
+    private attendanceRepo: Repository<Attendance>,
     @InjectRepository(Lecture) private lectureRepo: Repository<Lecture>,
     @InjectRepository(Student) private studentRepo: Repository<Student>,
     @InjectRepository(Lecturer) private lecturerRepo: Repository<Lecturer>,
@@ -28,6 +35,8 @@ export class AttendanceService {
     @InjectRepository(ExamOfficer) private examRepo: Repository<ExamOfficer>,
     @InjectRepository(Faculty) private facultyRepo: Repository<Faculty>,
     @InjectRepository(Department) private deptRepo: Repository<Department>,
+    @InjectRepository(AttendanceSession)
+    private readonly sessionRepo: Repository<AttendanceSession>,
   ) {}
 
   // ==================================================================
@@ -38,7 +47,8 @@ export class AttendanceService {
   async createLecturer(data: any) {
     const email = data.email.toLowerCase();
     const existing = await this.lecturerRepo.findOneBy({ email });
-    if (existing) throw new BadRequestException('Lecturer email already exists');
+    if (existing)
+      throw new BadRequestException('Lecturer email already exists');
 
     const rawPassword = data.password || 'password123';
     const salt = await bcrypt.genSalt(10);
@@ -53,7 +63,7 @@ export class AttendanceService {
       faculty: capitalize(data.faculty),
       email: email,
       phoneNumber: data.phoneNumber,
-      password: hashedPassword, 
+      password: hashedPassword,
     });
 
     return this.lecturerRepo.save(lecturer);
@@ -94,7 +104,7 @@ export class AttendanceService {
       lecturer: lecturer,
       level: data.level,
       classDateTime: new Date(),
-      isActive: false, 
+      isActive: false,
     });
 
     return this.lectureRepo.save(lecture);
@@ -104,7 +114,7 @@ export class AttendanceService {
   async getLecturerClasses(lecturerId: string) {
     return this.lectureRepo.find({
       where: { lecturer: { id: lecturerId } },
-      order: { classDateTime: 'DESC' } 
+      order: { classDateTime: 'DESC' },
     });
   }
 
@@ -120,23 +130,39 @@ export class AttendanceService {
     lecture.isActive = true;
     lecture.activeLatitude = lat;
     lecture.activeLongitude = long;
-    lecture.activeTopic = "General Session"; // Default topic for legacy calls
+    lecture.activeTopic = 'General Session'; // Default topic for legacy calls
     lecture.activeStartTime = new Date();
 
     return this.lectureRepo.save(lecture);
   }
 
-  // 🔥 NEW: Activate Session (With Topic)
-  async activateSession(lectureId: string, topic: string, lat: number, long: number) {
+  // Activate Session (With Topic)
+  async activateSession(
+    lectureId: string,
+    topic: string,
+    lat: number,
+    long: number,
+  ) {
     const lecture = await this.lectureRepo.findOneBy({ id: lectureId });
     if (!lecture) throw new BadRequestException('Course not found');
 
+    // 1. Create a NEW unique session for this specific class hour
+    const newSession = this.sessionRepo.create({
+      lecture: lecture,
+      startTime: new Date(),
+    });
+    const savedSession = await this.sessionRepo.save(newSession);
+
+    // 2. Update the lecture with the "Live" metadata
     lecture.isActive = true;
     lecture.status = 'active';
-    lecture.activeTopic = topic; 
+    lecture.activeTopic = topic;
     lecture.activeLatitude = lat;
     lecture.activeLongitude = long;
     lecture.activeStartTime = new Date();
+
+    // 3. Store the current session ID so students link to it
+    lecture.currentSessionId = savedSession.id;
 
     return this.lectureRepo.save(lecture);
   }
@@ -148,51 +174,70 @@ export class AttendanceService {
 
     // Auto-close if older than 4 hours
     if (lecture.isActive && lecture.activeStartTime) {
-       const now = new Date();
-       const diffHours = (now.getTime() - lecture.activeStartTime.getTime()) / 1000 / 60 / 60;
-       if (diffHours > 4) {
-         lecture.isActive = false;
-         await this.lectureRepo.save(lecture);
-         return { isActive: false };
-       }
+      const now = new Date();
+      const diffHours =
+        (now.getTime() - lecture.activeStartTime.getTime()) / 1000 / 60 / 60;
+      if (diffHours > 4) {
+        lecture.isActive = false;
+        await this.lectureRepo.save(lecture);
+        return { isActive: false };
+      }
     }
 
     return {
       isActive: lecture.isActive,
       topic: lecture.activeTopic,
-      startedAt: lecture.activeStartTime
+      startedAt: lecture.activeStartTime,
     };
   }
 
- // 📸 MARK ATTENDANCE
-  async markAttendance(studentId: string, lectureId: string, lat: number, long: number, deviceId: string, file: Express.Multer.File) {
+  // 📸 MARK ATTENDANCE
+  async markAttendance(
+    studentId: string,
+    lectureId: string,
+    lat: number,
+    long: number,
+    deviceId: string,
+    file: Express.Multer.File,
+  ) {
     const lecture = await this.lectureRepo.findOneBy({ id: lectureId });
     const student = await this.studentRepo.findOneBy({ id: studentId });
 
     if (!lecture || !student) throw new BadRequestException('Invalid details');
-    
-    // 1. TIME CHECK
-    if (!lecture.isActive) throw new BadRequestException('Session Closed. You cannot mark attendance for this class.');
+    if (!lecture.isActive) throw new BadRequestException('Session Closed.');
 
-    // 2. DEVICE CHECK
+    // 1. DEVICE CHECK (Must be unique for THIS specific session)
     const usageRecord = await this.attendanceRepo.findOne({
-      where: { lecture: { id: lectureId }, deviceId: deviceId },
-      relations: ['student']
+      where: { session: { id: lecture.currentSessionId }, deviceId: deviceId },
+      relations: ['student'],
     });
-
     if (usageRecord && usageRecord.student.id !== studentId) {
-      throw new BadRequestException(`FRAUD DETECTED: This device was already used by ${usageRecord.student.firstName}!`);
+      throw new BadRequestException(
+        `Device used by another student for this session!`,
+      );
     }
 
-    // 3. LOCATION CHECK
-    const distance = this.getDistance(lat, long, lecture.activeLatitude, lecture.activeLongitude);
-    if (distance > 100) throw new BadRequestException(`Too far! You are ${distance.toFixed(0)}m away from the class.`);
+    // 2. LOCATION CHECK (Keep as is)
+    const distance = this.getDistance(
+      lat,
+      long,
+      lecture.activeLatitude,
+      lecture.activeLongitude,
+    );
+    if (distance > 100) throw new BadRequestException(`Too far from class.`);
 
-    // 4. DUPLICATE CHECK
+    // 3. NEW DUPLICATE CHECK (Allow marking different sessions for the same course)
+    // We check if student already marked THIS SPECIFIC SESSION ID
     const existing = await this.attendanceRepo.findOne({
-      where: { student: { id: studentId }, lecture: { id: lectureId } }
+      where: {
+        student: { id: studentId },
+        session: { id: lecture.currentSessionId },
+      },
     });
-    if (existing) throw new BadRequestException('You have already signed in.');
+    if (existing)
+      throw new BadRequestException(
+        'Attendance already recorded for this session.',
+      );
 
     // Save File
     const uploadDir = './uploads';
@@ -200,62 +245,73 @@ export class AttendanceService {
     const fileName = `${student.matricNumber.replace(/\//g, '-')}_${Date.now()}.jpg`;
     fs.writeFileSync(path.join(uploadDir, fileName), file.buffer);
 
-    // ✅ SAVE ATTENDANCE WITH TOPIC SNAPSHOT
+    // 4. SAVE ATTENDANCE LINKED TO SESSION
     const attendance = this.attendanceRepo.create({
       student,
       lecture,
-      topic: lecture.activeTopic || lecture.courseTitle, // <--- Saves "Intro to AI" permanently
+      session: { id: lecture.currentSessionId },
+      topic: lecture.activeTopic,
       deviceId,
       capturedLat: lat,
       capturedLong: long,
       distanceMeters: distance,
-      photoUrl: `/uploads/${fileName}`
+      photoUrl: `/uploads/${fileName}`,
     });
 
     return this.attendanceRepo.save(attendance);
   }
 
   // 🛡️ PRE-FLIGHT CHECK
-  async verifyAttendanceEligibility(matricNumber: string, lectureId: string, deviceId: string) {
+  async verifyAttendanceEligibility(
+    matricNumber: string,
+    lectureId: string,
+    deviceId: string,
+  ) {
     const cleanId = matricNumber.trim().toLowerCase();
 
     // 1. Find Student
-    const student = await this.studentRepo.createQueryBuilder("student")
-      .where("LOWER(student.matricNumber) = :id", { id: cleanId })
+    const student = await this.studentRepo
+      .createQueryBuilder('student')
+      .where('LOWER(student.matricNumber) = :id', { id: cleanId })
       .getOne();
 
-    if (!student) throw new NotFoundException("Matric Number not found.");
+    if (!student) throw new NotFoundException('Matric Number not found.');
 
     // 2. Find Lecture
     const lecture = await this.lectureRepo.findOneBy({ id: lectureId });
-    if (!lecture) throw new NotFoundException("Course not found.");
+    if (!lecture) throw new NotFoundException('Course not found.');
 
     // 3. CHECK: Is Class Active?
     if (!lecture.isActive) {
-      throw new BadRequestException("This class session is not active.");
+      throw new BadRequestException('This class session is not active.');
     }
 
     // 4. CHECK: Device Integrity
     const deviceUsage = await this.attendanceRepo.findOne({
       where: { lecture: { id: lectureId }, deviceId: deviceId },
-      relations: ['student']
+      relations: ['student'],
     });
 
     if (deviceUsage) {
       if (deviceUsage.student.id !== student.id) {
-        throw new BadRequestException(`Security Alert: This device was already used by ${deviceUsage.student.firstName}.`);
+        throw new BadRequestException(
+          `Security Alert: This device was already used by ${deviceUsage.student.firstName}.`,
+        );
       } else {
-        throw new BadRequestException("You have already marked attendance for this class.");
+        throw new BadRequestException(
+          'You have already marked attendance for this class.',
+        );
       }
     }
 
     // 5. 🛑 CHECK: Student Duplicate
     const studentRecord = await this.attendanceRepo.findOne({
-      where: { student: { id: student.id }, lecture: { id: lectureId } }
+      where: { student: { id: student.id }, lecture: { id: lectureId } },
     });
-    if (studentRecord) throw new BadRequestException("You have already signed in.");
+    if (studentRecord)
+      throw new BadRequestException('You have already signed in.');
 
-    return student; 
+    return student;
   }
 
   // ==================================================================
@@ -263,55 +319,60 @@ export class AttendanceService {
   // ==================================================================
 
   // A. Exam Eligibility Report
- async getCourseReport(lectureIdOrCode: string) {
-    
-    // Try to find lectures by specific ID first, or fall back to Code
-    // NOTE: Usually reports are per "Course Code" across a session
-    
-    const validLecturesCount = await this.lectureRepo.createQueryBuilder('lecture')
-      .where('lecture.courseCode = :code', { code: lectureIdOrCode }) // Searching by Code now
-      .andWhere('lecture.activeLatitude IS NOT NULL') 
-      .getCount();
+async getCourseReport(lectureId: string) {
+  // 1. Get the course metadata to know which Department/Level to look for
+  const lecture = await this.lectureRepo.findOne({ where: { id: lectureId } });
+  if (!lecture) throw new BadRequestException('Course not found');
 
-    if (validLecturesCount === 0) return { totalClasses: 0, students: [] };
+  // 2. Count ACTUAL sessions started (The denominator for 80%)
+  const totalSessionsHeld = await this.sessionRepo.count({
+    where: { lecture: { id: lectureId } }
+  });
 
-    // Find attendance for this Course Code
-    const records = await this.attendanceRepo.createQueryBuilder('attendance')
-      .leftJoinAndSelect('attendance.student', 'student')
-      .leftJoin('attendance.lecture', 'lecture')
-      .where('lecture.courseCode = :code', { code: lectureIdOrCode })
-      .getMany();
+  // 3. Find ALL students who SHOULD be in this class (Registry-based)
+  // This ensures students with 0 attendance still show up in the report
+  const students = await this.studentRepo.find({
+    where: { 
+      department: lecture.department, 
+      level: lecture.level 
+    }
+  });
 
-    const studentMap = new Map<string, { student: Student, count: number }>();
-    
-    records.forEach(r => {
-      const sid = r.student.id;
-      let entry = studentMap.get(sid);
-      if (!entry) {
-        entry = { student: r.student, count: 0 };
-        studentMap.set(sid, entry);
-      }
-      entry.count++;
-    });
-
-    const report = Array.from(studentMap.values()).map(item => {
-      const percentage = (item.count / validLecturesCount) * 100;
-      return {
-        firstName: item.student.firstName,
-        lastName: item.student.lastName,
-        matricNumber: item.student.matricNumber,
-        attended: item.count,
-        total: validLecturesCount,
-        percentage: percentage.toFixed(1),
-        isEligible: percentage >= 80 
-      };
-    });
-
-    return { 
-      totalClasses: validLecturesCount, 
-      students: report.sort((a, b) => a.lastName.localeCompare(b.lastName)) 
-    };
+  if (students.length === 0) {
+    throw new BadRequestException(`No students registered in ${lecture.department} at ${lecture.level} level.`);
   }
+
+  // 4. Map the students to their attendance counts
+  const studentList = await Promise.all(students.map(async (student) => {
+    const attendedCount = await this.attendanceRepo.count({
+      where: { 
+        student: { id: student.id }, 
+        lecture: { id: lectureId } 
+      }
+    });
+
+    const percentage = totalSessionsHeld > 0 
+      ? (attendedCount / totalSessionsHeld) * 100 
+      : 0;
+
+    return {
+      firstName: student.firstName,
+      lastName: student.lastName,
+      matricNumber: student.matricNumber,
+      attended: attendedCount,
+      total: totalSessionsHeld,
+      percentage: percentage.toFixed(1),
+      isEligible: percentage >= 80 // Threshold check
+    };
+  }));
+
+  return {
+    courseTitle: lecture.courseTitle,
+    courseCode: lecture.courseCode,
+    totalClasses: totalSessionsHeld,
+    students: studentList.sort((a, b) => a.lastName.localeCompare(b.lastName)),
+  };
+}
 
   async getMetrics() {
     const todayStart = new Date();
@@ -319,12 +380,17 @@ export class AttendanceService {
     const todayEnd = new Date();
     todayEnd.setHours(23, 59, 59, 999);
 
-    const [totalStudents, totalLecturers, classesToday, attendanceToday] = await Promise.all([
-      this.studentRepo.count(),
-      this.lecturerRepo.count(),
-      this.lectureRepo.count({ where: { classDateTime: Between(todayStart, todayEnd) } }),
-      this.attendanceRepo.count({ where: { timestamp: Between(todayStart, todayEnd) } })
-    ]);
+    const [totalStudents, totalLecturers, classesToday, attendanceToday] =
+      await Promise.all([
+        this.studentRepo.count(),
+        this.lecturerRepo.count(),
+        this.lectureRepo.count({
+          where: { classDateTime: Between(todayStart, todayEnd) },
+        }),
+        this.attendanceRepo.count({
+          where: { timestamp: Between(todayStart, todayEnd) },
+        }),
+      ]);
 
     return { totalStudents, totalLecturers, classesToday, attendanceToday };
   }
@@ -341,17 +407,20 @@ export class AttendanceService {
     return this.deptRepo.save(this.deptRepo.create({ name, faculty }));
   }
 
-  async getAllFaculties() { return this.facultyRepo.find(); }
+  async getAllFaculties() {
+    return this.facultyRepo.find();
+  }
 
   async getDepartments(facultyId: string) {
     return this.deptRepo.find({ where: { faculty: { id: facultyId } } });
   }
 
   async getSessions() {
-    return this.lectureRepo.createQueryBuilder("lecture")
-      .select("DISTINCT lecture.session", "session")
-      .orderBy("lecture.session", "DESC")
-      .getRawMany(); 
+    return this.lectureRepo
+      .createQueryBuilder('lecture')
+      .select('DISTINCT lecture.session', 'session')
+      .orderBy('lecture.session', 'DESC')
+      .getRawMany();
   }
 
   async getLecturers(department?: string, level?: string) {
@@ -364,8 +433,8 @@ export class AttendanceService {
   async identifyStudent(identifier: string) {
     const cleanId = identifier.trim();
     const student = await this.studentRepo
-      .createQueryBuilder("student")
-      .where("LOWER(student.matricNumber) = LOWER(:id)", { id: cleanId })
+      .createQueryBuilder('student')
+      .where('LOWER(student.matricNumber) = LOWER(:id)', { id: cleanId })
       .getOne();
 
     if (!student) throw new NotFoundException(`Student not found`);
@@ -373,46 +442,60 @@ export class AttendanceService {
   }
 
   // --- Admin/User Helpers ---
-  async createAdmin(data: any) { 
-      const email = data.email.toLowerCase();
-      const existing = await this.adminRepo.findOneBy({ email });
-      if (existing) throw new BadRequestException('Admin email already exists');
-      const salt = await bcrypt.genSalt(10);
-      const hashedPassword = await bcrypt.hash(data.password || 'admin123', salt);
-      return this.adminRepo.save(this.adminRepo.create({ ...data, email, password: hashedPassword }));
+  async createAdmin(data: any) {
+    const email = data.email.toLowerCase();
+    const existing = await this.adminRepo.findOneBy({ email });
+    if (existing) throw new BadRequestException('Admin email already exists');
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(data.password || 'admin123', salt);
+    return this.adminRepo.save(
+      this.adminRepo.create({ ...data, email, password: hashedPassword }),
+    );
   }
 
-  async createExamOfficer(data: any) { 
-      const email = data.email.toLowerCase();
-      const existing = await this.examRepo.findOneBy({ email });
-      if (existing) throw new BadRequestException('Email already exists');
-      const salt = await bcrypt.genSalt(10);
-      const hashedPassword = await bcrypt.hash(data.password || 'exam123', salt);
-      return this.examRepo.save(this.examRepo.create({ ...data, email, password: hashedPassword }));
+  async createExamOfficer(data: any) {
+    const email = data.email.toLowerCase();
+    const existing = await this.examRepo.findOneBy({ email });
+    if (existing) throw new BadRequestException('Email already exists');
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(data.password || 'exam123', salt);
+    return this.examRepo.save(
+      this.examRepo.create({ ...data, email, password: hashedPassword }),
+    );
   }
-  
-  async changePassword(data: any) { 
-     const { id, role, oldPassword, newPassword } = data;
-     let repo: any = role === 'admin' ? this.adminRepo : role === 'exam_officer' ? this.examRepo : this.lecturerRepo;
-     const user = await repo.findOneBy({ id });
-     if (!user) throw new BadRequestException('User not found');
-     if (!await bcrypt.compare(oldPassword, user.password)) throw new BadRequestException('Incorrect old password');
-     const salt = await bcrypt.genSalt(10);
-     user.password = await bcrypt.hash(newPassword, salt);
-     await repo.save(user);
-     return { message: 'Password updated' };
+
+  async changePassword(data: any) {
+    const { id, role, oldPassword, newPassword } = data;
+    let repo: any =
+      role === 'admin'
+        ? this.adminRepo
+        : role === 'exam_officer'
+          ? this.examRepo
+          : this.lecturerRepo;
+    const user = await repo.findOneBy({ id });
+    if (!user) throw new BadRequestException('User not found');
+    if (!(await bcrypt.compare(oldPassword, user.password)))
+      throw new BadRequestException('Incorrect old password');
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(newPassword, salt);
+    await repo.save(user);
+    return { message: 'Password updated' };
   }
 
   // Helper: Haversine
   private getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
-    const R = 6371e3; 
+    const R = 6371e3;
     const toRad = (val: number) => (val * Math.PI) / 180;
     const dLat = toRad(lat2 - lat1);
     const dLon = toRad(lon2 - lon1);
-    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-              Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    return R * c; 
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(toRad(lat1)) *
+        Math.cos(toRad(lat2)) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
   }
 
   // ADD TOPIC TO COURSE
@@ -437,33 +520,63 @@ export class AttendanceService {
   async getAllStudents() {
     return this.studentRepo.find({
       order: {
-        lastName: 'ASC', 
+        lastName: 'ASC',
       },
     });
   }
 
   async updateStudent(id: string, updateData: any) {
-  const student = await this.studentRepo.findOneBy({ id });
-  if (!student) throw new NotFoundException('Student not found');
-  Object.assign(student, updateData);
-  
-  return this.studentRepo.save(student);
-}
+    const student = await this.studentRepo.findOneBy({ id });
+    if (!student) throw new NotFoundException('Student not found');
+    Object.assign(student, updateData);
 
-async updateLecturer(id: string, updateData: { title: string; firstName: string; lastName: string; email: string }) {
-  const lecturer = await this.lecturerRepo.findOneBy({ id });
-  if (!lecturer) throw new NotFoundException('Lecturer not found');
-  
-  Object.assign(lecturer, updateData);
-  return this.lecturerRepo.save(lecturer);
-}
+    return this.studentRepo.save(student);
+  }
 
-async deactivateSession(lectureId: string) {
-  const lecture = await this.lectureRepo.findOneBy({ id: lectureId });
-  if (!lecture) throw new NotFoundException('Course not found');
-  lecture.isActive = false;
-  lecture.status = 'inactive'; 
-  
-  return this.lectureRepo.save(lecture);
-}
+  async updateLecturer(
+    id: string,
+    updateData: {
+      title: string;
+      firstName: string;
+      lastName: string;
+      email: string;
+    },
+  ) {
+    const lecturer = await this.lecturerRepo.findOneBy({ id });
+    if (!lecturer) throw new NotFoundException('Lecturer not found');
+
+    Object.assign(lecturer, updateData);
+    return this.lecturerRepo.save(lecturer);
+  }
+
+  async deactivateSession(lectureId: string) {
+    const lecture = await this.lectureRepo.findOneBy({ id: lectureId });
+    if (!lecture) throw new NotFoundException('Course not found');
+    lecture.isActive = false;
+    lecture.status = 'inactive';
+
+    return this.lectureRepo.save(lecture);
+  }
+
+  async getStudentEligibility(studentId: string, lectureId: string) {
+    const totalSessionsHeld = await this.sessionRepo.count({
+      where: { lecture: { id: lectureId } },
+    });
+
+    const totalAttended = await this.attendanceRepo.count({
+      where: { student: { id: studentId }, lecture: { id: lectureId } },
+    });
+
+    const percentage =
+      totalSessionsHeld > 0
+        ? Math.round((totalAttended / totalSessionsHeld) * 100)
+        : 0;
+
+    return {
+      attended: totalAttended,
+      totalHeld: totalSessionsHeld,
+      percentage,
+      isEligible: percentage >= 80,
+    };
+  }
 }

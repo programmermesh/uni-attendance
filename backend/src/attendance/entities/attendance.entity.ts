@@ -1,6 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn } from 'typeorm';
 import { Student } from './student.entity';
 import { Lecture } from './lecture.entity';
+import { AttendanceSession } from './attendanceSession.entity';
 
 @Entity()
 export class Attendance {
@@ -12,7 +13,6 @@ export class Attendance {
 
   @ManyToOne(() => Lecture, (lecture) => lecture.attendances)
   lecture: Lecture;
-
 
   @Column({ nullable: true })
   topic: string; 
@@ -34,4 +34,7 @@ export class Attendance {
 
   @CreateDateColumn()
   timestamp: Date;
+
+  @ManyToOne(() => AttendanceSession, (session) => session.attendances)
+  session: AttendanceSession;
 }

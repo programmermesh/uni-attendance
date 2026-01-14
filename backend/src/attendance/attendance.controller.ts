@@ -146,7 +146,7 @@ export class AttendanceController {
     return this.service.identifyStudent(body.identifier);
   }
 
-  // 🛡️ Pre-Flight Eligibility Check
+  // Pre-Flight Eligibility Check
   @Post('verify-eligibility')
   async verifyEligibility(@Body() body: { matricNumber: string; lectureId: string; deviceId: string }) {
     return this.service.verifyAttendanceEligibility(body.matricNumber, body.lectureId, body.deviceId);
@@ -178,11 +178,10 @@ export class AttendanceController {
   @Get('admin/metrics')
   async getMetrics() { return this.service.getMetrics(); }
 
-  @Get('admin/report')
-  async getReport(@Query('course') course: string) {
-    // Maps to the service method 'getCourseReport'
-    return this.service.getCourseReport(course);
-  }
+@Get('admin/report')
+async getReport(@Query('lectureId') lectureId: string) {
+  return this.service.getCourseReport(lectureId);
+}
 
   @Post('admin/add-topic')
   async addTopic(@Body() body: { lectureId: string; topic: string }) {

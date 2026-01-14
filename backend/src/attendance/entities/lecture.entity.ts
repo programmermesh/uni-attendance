@@ -20,6 +20,9 @@ export class Lecture {
   @Column({ default: 'inactive' }) 
   status: string;
 
+  @Column({ nullable: true })
+  currentSessionId: string;
+
 
   // ... (keep faculty, department, session, semester, level, etc.)
   @Column({ nullable: true }) faculty: string;
