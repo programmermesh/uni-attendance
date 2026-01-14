@@ -12,10 +12,11 @@ import { ExamOfficer } from '../exam-officer/exam-officer.entity';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Faculty } from 'src/school/faculty.entity';
 import { Department } from 'src/school/department.entity';
+import { AttendanceSession } from './entities/attendanceSession.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Attendance, Student, Lecture, Lecturer, Admin, ExamOfficer, Faculty, Department]), 
+    TypeOrmModule.forFeature([Attendance, Student, Lecture, Lecturer, Admin, ExamOfficer, Faculty, Department, AttendanceSession]), 
   ],
   controllers: [AttendanceController],
   providers: [AttendanceService],

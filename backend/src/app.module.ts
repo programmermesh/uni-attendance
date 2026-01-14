@@ -13,6 +13,7 @@ import { Admin } from './admin/admin.entity';
 import { ExamOfficer } from './exam-officer/exam-officer.entity';
 import { Department } from './school/department.entity';
 import { Faculty } from './school/faculty.entity';
+import { AttendanceSession } from './attendance/entities/attendanceSession.entity';
 
 @Module({
   imports: [
@@ -23,7 +24,7 @@ import { Faculty } from './school/faculty.entity';
       username: 'postgres', 
       password: 'password', 
       database: 'university_db',
-      entities: [Student, Lecture, Attendance, Lecturer, Admin, ExamOfficer, Faculty, Department],
+      entities: [Student, Lecture, Attendance, Lecturer, Admin, ExamOfficer, Faculty, Department, AttendanceSession],
       synchronize: true, 
     }),
     // Serve uploaded images publicly so frontend can see them
