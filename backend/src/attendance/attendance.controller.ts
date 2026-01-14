@@ -203,4 +203,23 @@ async updateLecturer(@Param('id') id: string, @Body() updateData: any) {
   return this.service.updateLecturer(id, updateData);
 }
 
+@Post('deactivate-session')
+async deactivate(@Body() body: { lectureId: string }) {
+  return this.service.deactivateSession(body.lectureId);
+}
+
+@Post('admin/bulk-promote')
+async bulkPromote(@Body() data: { ids: string[], newLevel: string }) {
+  return this.service.bulkPromoteStudents(data.ids, data.newLevel);
+}
+
+@Post('admin/lecture/bulk')
+async bulkCreateLecture(@Body() data: any) {
+  return this.service.bulkCreateLectures(data);
+}
+@Get('meta/all-classes')
+async getAllClasses() {
+  // This allows the Exam Officer to see courses from ALL lecturers
+  return this.service.getAllLectures();
+}
 }

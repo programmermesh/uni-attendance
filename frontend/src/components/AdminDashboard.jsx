@@ -262,7 +262,9 @@ function AdminDashboardContent({ user, goHome }) {
             </>
           )}
 
-          {user.role === "exam_officer" && (
+          {(user.role === "exam_officer" ||
+            user.role === "admin" ||
+            user.role === "lecturer") && (
             <>
               <NavSection title="Examinations" />
               <NavItem
@@ -362,29 +364,39 @@ const NavItem = ({ icon, label, active, onClick }) => (
 );
 
 // ============================================================================
-// OVERVIEW (Student Management)
+// OVERVIEW (Student Management with Bulk Promote & Custom Modals)
 // ============================================================================
 function DashboardOverview() {
   const toast = useToast();
+
+  // 1. Core Data State
   const [metrics, setMetrics] = useState({
     totalStudents: 0,
     totalLecturers: 0,
   });
   const [students, setStudents] = useState([]);
+  const [faculties, setFaculties] = useState([]);
+  const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // 2. Filter & Pagination State
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
-
   const [filterFaculty, setFilterFaculty] = useState("");
   const [filterDept, setFilterDept] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+
+  // 3. Action States (Edit & Bulk)
   const [editingStudent, setEditingStudent] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [promoting, setPromoting] = useState(false);
+  const [confirmModal, setConfirmModal] = useState({
+    show: false,
+    targetLevel: "",
+  });
 
-  const [faculties, setFaculties] = useState([]);
-  const [departments, setDepartments] = useState([]);
-
+  // --- FETCH DATA ---
   const loadDashboardData = async () => {
     try {
       setLoading(true);
@@ -410,6 +422,7 @@ function DashboardOverview() {
     loadDashboardData();
   }, []);
 
+  // Load Departments when Faculty filter changes
   useEffect(() => {
     if (filterFaculty) {
       const selectedFac = faculties.find(
@@ -426,26 +439,7 @@ function DashboardOverview() {
     }
   }, [filterFaculty, faculties]);
 
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, filterFaculty, filterDept]);
-
-  const levelStats = React.useMemo(() => {
-    if (!students.length) return [];
-    const stats = {};
-    students.forEach((s) => {
-      const lvl = s.level ? String(s.level).trim() : "Unknown";
-      stats[lvl] = (stats[lvl] || 0) + 1;
-    });
-    return Object.entries(stats)
-      .map(([level, count]) => ({
-        level,
-        count,
-        height: (count / students.length) * 100,
-      }))
-      .sort((a, b) => parseInt(a.level) - parseInt(b.level));
-  }, [students]);
-
+  // --- LOGIC: Filter & Selection ---
   const filteredStudents = students.filter((s) => {
     const fullName = `${s.firstName || ""} ${s.lastName || ""}`.toLowerCase();
     const matric = (s.matricNumber || "").toLowerCase();
@@ -475,6 +469,32 @@ function DashboardOverview() {
   );
   const totalPages = Math.ceil(filteredStudents.length / itemsPerPage);
 
+  const toggleSelectAll = () => {
+    if (selectedIds.length === currentItems.length && currentItems.length > 0)
+      setSelectedIds([]);
+    else setSelectedIds(currentItems.map((s) => s.id));
+  };
+
+  // --- ACTIONS: Bulk Promote ---
+  const executePromotion = async () => {
+    setPromoting(true);
+    try {
+      await axios.post(`${API_URL}/admin/bulk-promote`, {
+        ids: selectedIds,
+        newLevel: confirmModal.targetLevel,
+      });
+      toast.success(`Successfully promoted ${selectedIds.length} students!`);
+      setSelectedIds([]);
+      setConfirmModal({ show: false, targetLevel: "" });
+      loadDashboardData();
+    } catch (err) {
+      toast.error("Promotion failed");
+    } finally {
+      setPromoting(false);
+    }
+  };
+
+  // --- ACTIONS: Update Single Student ---
   const handleUpdateStudent = async (e) => {
     e.preventDefault();
     setSaving(true);
@@ -496,7 +516,8 @@ function DashboardOverview() {
   };
 
   return (
-    <div className="space-y-8 animate-fade-in-up pb-10">
+    <div className="space-y-8 animate-fade-in-up pb-20 relative">
+      {/* 📊 METRICS */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <MetricCard
           label="Total Students"
@@ -512,37 +533,50 @@ function DashboardOverview() {
         />
       </div>
 
-      <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm flex flex-col">
-        <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wide mb-6 flex items-center gap-2">
-          <Layers size={16} /> Level Distribution
-        </h3>
-        <div className="flex items-end justify-between h-40 w-full gap-4 px-2 pb-2 border-b border-gray-100">
-          {levelStats.map((stat) => (
-            <div
-              key={stat.level}
-              className="flex flex-col items-center flex-1 h-full group relative"
-            >
-              <div
-                className="w-full max-w-[30px] bg-blue-600 rounded-t-md transition-all duration-700 relative shadow-md group-hover:bg-blue-500"
-                style={{ height: `${Math.max(stat.height, 15)}%` }}
-              >
-                <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-black text-white text-[10px] px-2 py-1 rounded font-bold opacity-0 group-hover:opacity-100 z-20">
-                  {stat.count}
-                </div>
-              </div>
-              <span className="text-[10px] font-bold text-gray-400 mt-2">
-                {stat.level}
+      {/* 📥 BULK ACTION BAR */}
+      {selectedIds.length > 0 && (
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[60] w-full max-w-xl px-4">
+          <div className="bg-slate-900 text-white rounded-2xl p-4 shadow-2xl flex items-center justify-between border border-white/10 backdrop-blur-lg">
+            <div className="flex items-center gap-3 pl-2">
+              <span className="bg-blue-600 px-2 py-1 rounded text-[10px] font-black">
+                {selectedIds.length} SELECTED
               </span>
+              <p className="text-sm font-bold">Bulk Promote to:</p>
             </div>
-          ))}
+            <div className="flex items-center gap-2">
+              <select
+                className="bg-slate-800 border border-slate-700 text-xs rounded-lg px-3 py-2 outline-none cursor-pointer"
+                onChange={(e) =>
+                  e.target.value &&
+                  setConfirmModal({ show: true, targetLevel: e.target.value })
+                }
+              >
+                <option value="">-- Level --</option>
+                <option value="200">200</option>
+                <option value="300">300</option>
+                <option value="400">400</option>
+                <option value="500">500</option>
+                <option value="600">600</option>
+                <option value="700">700</option>
+              </select>
+              <button
+                onClick={() => setSelectedIds([])}
+                className="p-2 hover:text-red-400 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
 
+      {/* 🏢 STUDENT DIRECTORY CARD */}
       <Card
         title="Student Directory"
         subtitle="Manage university students"
         className="w-full"
       >
+        {/* Filters */}
         <div className="p-5 border-b border-gray-200 bg-gray-50/50">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
             <div className="md:col-span-4 relative">
@@ -552,7 +586,7 @@ function DashboardOverview() {
               />
               <input
                 type="text"
-                placeholder="Search students..."
+                placeholder="Search name or matric..."
                 className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:border-blue-500"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -593,13 +627,24 @@ function DashboardOverview() {
           </div>
         </div>
 
+        {/* Table */}
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-left">
             <thead className="bg-gray-50 text-gray-500 text-[10px] uppercase font-bold">
               <tr>
+                <th className="px-6 py-4 w-10">
+                  <input
+                    type="checkbox"
+                    className="w-4 h-4 rounded accent-blue-600 cursor-pointer"
+                    checked={
+                      selectedIds.length === currentItems.length &&
+                      currentItems.length > 0
+                    }
+                    onChange={toggleSelectAll}
+                  />
+                </th>
                 <th className="px-6 py-4">Student Name</th>
                 <th className="px-6 py-4">Matric No</th>
-                <th className="px-6 py-4">Faculty / Dept</th>
                 <th className="px-6 py-4 text-center">Level</th>
                 <th className="px-6 py-4 text-right">Edit</th>
               </tr>
@@ -615,35 +660,46 @@ function DashboardOverview() {
                 currentItems.map((s) => (
                   <tr
                     key={s.id}
-                    className="hover:bg-blue-50/50 transition-colors"
+                    className={`${
+                      selectedIds.includes(s.id)
+                        ? "bg-blue-50/50"
+                        : "hover:bg-blue-50/20"
+                    } transition-colors`}
                   >
+                    <td className="px-6 py-4">
+                      <input
+                        type="checkbox"
+                        className="w-4 h-4 rounded accent-blue-600 cursor-pointer"
+                        checked={selectedIds.includes(s.id)}
+                        onChange={() =>
+                          setSelectedIds((prev) =>
+                            prev.includes(s.id)
+                              ? prev.filter((i) => i !== s.id)
+                              : [...prev, s.id]
+                          )
+                        }
+                      />
+                    </td>
                     <td className="px-6 py-4 font-medium text-gray-900">
                       {s.lastName} {s.firstName}
+                      <div className="text-[9px] text-gray-400 font-bold uppercase tracking-tight">
+                        {typeof s.department === "object"
+                          ? s.department?.name
+                          : s.department}
+                      </div>
                     </td>
                     <td className="px-6 py-4 font-mono text-xs text-gray-500">
                       {s.matricNumber}
                     </td>
-                    <td className="px-6 py-4">
-                      <span className="text-[10px] font-bold text-gray-700 block truncate max-w-[150px]">
-                        {typeof s.faculty === "object"
-                          ? s.faculty?.name
-                          : s.faculty}
-                      </span>
-                      <span className="text-[10px] text-gray-400 block truncate max-w-[150px]">
-                        {typeof s.department === "object"
-                          ? s.department?.name
-                          : s.department}
-                      </span>
-                    </td>
                     <td className="px-6 py-4 text-center">
-                      <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded text-[10px] font-bold">
-                        {s.level}
+                      <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-[10px] font-black italic">
+                        {s.level}L
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right">
                       <button
                         onClick={() => setEditingStudent({ ...s })}
-                        className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg"
+                        className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"
                       >
                         <Settings size={18} />
                       </button>
@@ -655,6 +711,7 @@ function DashboardOverview() {
           </table>
         </div>
 
+        {/* Pagination */}
         <div className="p-4 bg-gray-50 border-t border-gray-200 flex justify-between items-center">
           <p className="text-[10px] text-gray-500 font-bold uppercase">
             Page {currentPage} of {totalPages || 1}
@@ -663,14 +720,14 @@ function DashboardOverview() {
             <button
               disabled={currentPage === 1}
               onClick={() => setCurrentPage((p) => p - 1)}
-              className="p-2 rounded-lg bg-white border border-gray-200 disabled:opacity-50"
+              className="p-2 rounded-lg bg-white border border-gray-200 disabled:opacity-50 hover:bg-gray-50"
             >
               <ArrowLeft size={16} />
             </button>
             <button
               disabled={currentPage === totalPages || totalPages === 0}
               onClick={() => setCurrentPage((p) => p + 1)}
-              className="p-2 rounded-lg bg-white border border-gray-200 disabled:opacity-50"
+              className="p-2 rounded-lg bg-white border border-gray-200 disabled:opacity-50 hover:bg-gray-50"
             >
               <ArrowRight size={16} />
             </button>
@@ -678,21 +735,27 @@ function DashboardOverview() {
         </div>
       </Card>
 
+      {/* 🛠️ MODAL 1: EDIT STUDENT INFO */}
       {editingStudent && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-zoom-in">
-            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-blue-50/50">
-              <h3 className="text-xl font-bold text-gray-900">
-                Edit Student Info
-              </h3>
+          <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md overflow-hidden animate-zoom-in">
+            <div className="p-8 border-b border-gray-100 flex justify-between items-center bg-blue-50/30">
+              <div>
+                <h3 className="text-xl font-black text-slate-900 italic uppercase">
+                  Edit Record
+                </h3>
+                <p className="text-xs text-slate-500 font-bold">
+                  {editingStudent.matricNumber}
+                </p>
+              </div>
               <button
                 onClick={() => setEditingStudent(null)}
-                className="p-2 text-gray-400"
+                className="p-2 text-slate-400 hover:text-red-500"
               >
-                <X size={20} />
+                <X size={24} />
               </button>
             </div>
-            <form onSubmit={handleUpdateStudent} className="p-6 space-y-4">
+            <form onSubmit={handleUpdateStudent} className="p-8 space-y-5">
               <div className="grid grid-cols-2 gap-4">
                 <FormInput
                   label="First Name"
@@ -717,7 +780,7 @@ function DashboardOverview() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <FormSelect
-                  label="Level"
+                  label="Academic Level"
                   value={editingStudent.level}
                   onChange={(e) =>
                     setEditingStudent({
@@ -732,10 +795,11 @@ function DashboardOverview() {
                   <option>400</option>
                   <option>500</option>
                   <option>600</option>
+                  <option>700</option>
                   <option>PGC</option>
                 </FormSelect>
                 <FormSelect
-                  label="Sex"
+                  label="Gender"
                   value={editingStudent.sex}
                   onChange={(e) =>
                     setEditingStudent({
@@ -752,19 +816,63 @@ function DashboardOverview() {
                 <button
                   type="button"
                   onClick={() => setEditingStudent(null)}
-                  className="flex-1 py-3 text-sm font-bold text-gray-500 bg-gray-100 rounded-xl"
+                  className="flex-1 py-4 text-sm font-bold text-gray-400 bg-gray-50 rounded-2xl hover:bg-gray-100 transition-all"
                 >
-                  Cancel
+                  Discard
                 </button>
                 <Button
                   type="submit"
                   loading={saving}
-                  colorClass="bg-blue-600 hover:bg-blue-700 flex-1"
+                  colorClass="bg-blue-600 hover:bg-blue-700 flex-[2] py-4 shadow-xl shadow-blue-200"
                 >
                   Save Changes
                 </Button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* BULK PROMOTE CONFIRMATION */}
+      {confirmModal.show && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white rounded-[2.5rem] p-10 max-w-sm w-full shadow-2xl text-center space-y-6 animate-zoom-in">
+            <div className="w-20 h-20 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto shadow-inner">
+              <ArrowRight size={40} className="animate-pulse" />
+            </div>
+            <div>
+              <h3 className="text-2xl font-black text-slate-900">
+                Are you sure?
+              </h3>
+              <p className="text-sm text-slate-500 mt-2">
+                You are moving{" "}
+                <span className="font-bold text-blue-600">
+                  {selectedIds.length} students
+                </span>{" "}
+                to{" "}
+                <span className="font-bold text-slate-900">
+                  {confirmModal.targetLevel} Level
+                </span>
+                .
+              </p>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() =>
+                  setConfirmModal({ show: false, targetLevel: "" })
+                }
+                className="flex-1 py-4 bg-gray-50 text-gray-400 rounded-2xl font-bold hover:bg-gray-100"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={executePromotion}
+                disabled={promoting}
+                className="flex-[2] py-4 bg-blue-600 text-white rounded-2xl font-black shadow-lg shadow-blue-200 flex items-center justify-center"
+              >
+                {promoting ? <Spinner /> : "Confirm Promotion"}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1333,31 +1441,16 @@ function RegisterStaff() {
 
   const handleSubmit = async () => {
     setLoading(true);
-    const facultyName =
-      faculties.find((f) => f.id === form.faculty)?.name || form.faculty;
-    const deptName =
-      departments.find((d) => d.id === form.department)?.name ||
-      form.department;
-    const payload = { ...form, faculty: facultyName, department: deptName };
-
-    let endpoint = "";
-    if (roleType === "lecturer") endpoint = `${API_URL}/admin/lecturer`;
-    if (roleType === "admin") endpoint = `${API_URL}/admin/create-admin`;
-    if (roleType === "exam_officer")
-      endpoint = `${API_URL}/admin/create-exam-officer`;
-
     try {
-      await axios.post(endpoint, payload);
-      toast.success("Account Created Successfully!");
-      setForm({
+      await axios.post(`${API_URL}/admin/lecture/bulk`, {
         ...form,
-        firstName: "",
-        lastName: "",
-        email: "",
-        phoneNumber: "",
+        lecturerId: currentUser.id,
+        targets: selectedTargets, // This is now an array of {faculty, department} strings
       });
+      toast.success("Courses created!");
+      setSelectedTargets([]);
     } catch (err) {
-      toast.error("Failed to create account");
+      toast.error("Failed to create courses");
     } finally {
       setLoading(false);
     }
@@ -1695,7 +1788,7 @@ function ManageStudents() {
 }
 
 // ============================================================================
-// MANAGE COURSES (Split Fields Implementation)
+// MANAGE COURSES (Bulk Creation with Multi-Select logic)
 // ============================================================================
 function ManageCourses({ currentUser }) {
   const toast = useToast();
@@ -1703,14 +1796,15 @@ function ManageCourses({ currentUser }) {
   const [form, setForm] = useState({
     courseCode: "",
     courseTitle: "",
-    groupName: "Group A",
-    lecturerId: currentUser.id,
-    faculty: currentUser.faculty || "",
-    department: currentUser.department || "",
     level: "100",
     session: "2025/2026",
     semester: "1st",
   });
+
+  // Target Selection State
+  const [tempFaculty, setTempFaculty] = useState("");
+  const [tempDept, setTempDept] = useState("");
+  const [selectedTargets, setSelectedTargets] = useState([]); // Array of {fac, dept}
 
   const [faculties, setFaculties] = useState([]);
   const [departments, setDepartments] = useState([]);
@@ -1723,42 +1817,69 @@ function ManageCourses({ currentUser }) {
   }, []);
 
   useEffect(() => {
-    if (faculties.length === 0) return;
-    if (form.faculty) {
-      const selectedFac = faculties.find(
-        (f) => f.id === form.faculty || f.name === form.faculty
+    if (tempFaculty) {
+      const facObj = faculties.find(
+        (f) => f.id === tempFaculty || f.name === tempFaculty
       );
-      const facId = selectedFac ? selectedFac.id : null;
-      if (facId)
-        axios
-          .get(`${API_URL}/meta/departments-list?facultyId=${facId}`)
-          .then((res) => setDepartments(res.data))
-          .catch(() => setDepartments([]));
+      const facId = facObj ? facObj.id : tempFaculty;
+      axios
+        .get(`${API_URL}/meta/departments-list?facultyId=${facId}`)
+        .then((res) => setDepartments(res.data))
+        .catch(() => setDepartments([]));
     } else {
       setDepartments([]);
     }
-  }, [form.faculty, faculties]);
+  }, [tempFaculty, faculties]);
 
-  const handleSubmit = async () => {
-    if (!form.courseCode || !form.courseTitle) {
-      toast.error("Please enter both Course Code and Title");
+  const addTarget = () => {
+    if (!tempFaculty || !tempDept) {
+      toast.error("Select both Faculty and Department first");
       return;
     }
 
+    // Find the actual names from your state lists
+    const facultyObj = faculties.find((f) => f.id === tempFaculty);
+    const deptObj = departments.find((d) => d.id === tempDept);
+
+    const facultyName = facultyObj ? facultyObj.name : tempFaculty;
+    const deptName = deptObj ? deptObj.name : tempDept;
+
+    // Avoid duplicates
+    const exists = selectedTargets.find((t) => t.department === deptName);
+    if (exists) {
+      toast.error("This department is already added");
+      return;
+    }
+
+    // Store as 'faculty' and 'department' (matching your DB columns)
+    setSelectedTargets([
+      ...selectedTargets,
+      { faculty: facultyName, department: deptName },
+    ]);
+
+    setTempDept("");
+  };
+
+  const removeTarget = (index) => {
+    setSelectedTargets(selectedTargets.filter((_, i) => i !== index));
+  };
+
+  const handleSubmit = async () => {
     setLoading(true);
-
-    const payload = {
-      ...form,
-      courseCode: form.courseCode.toUpperCase(),
-      courseTitle: form.courseTitle,
-    };
-
     try {
-      await axios.post(`${API_URL}/admin/lecture`, payload);
-      toast.success("Course Created Successfully!");
+      // Send the data exactly as the backend expects
+      const payload = {
+        ...form, // courseCode, courseTitle, level, session, semester
+        lecturerId: currentUser.id,
+        targets: selectedTargets, // Array of { faculty: "...", department: "..." }
+      };
+
+      await axios.post(`${API_URL}/admin/lecture/bulk`, payload);
+      toast.success("Courses Created Successfully!");
+      setSelectedTargets([]);
       setForm({ ...form, courseCode: "", courseTitle: "" });
     } catch (err) {
-      toast.error(err.response?.data?.message || "Failed to create course");
+      toast.error("Failed to create courses");
     } finally {
       setLoading(false);
     }
@@ -1766,124 +1887,154 @@ function ManageCourses({ currentUser }) {
 
   return (
     <Card
-      title="Create New Course"
-      subtitle="Add a course to your schedule"
+      title="Create Course"
+      subtitle="Assign one course to multiple departments at once"
       className="w-full"
     >
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        <FormInput
-          label="Academic Session"
-          icon={Calendar}
-          value={form.session}
-          onChange={(e) => setForm({ ...form, session: e.target.value })}
-        />
-        <FormSelect
-          label="Semester"
-          icon={Clock}
-          value={form.semester}
-          onChange={(e) => setForm({ ...form, semester: e.target.value })}
-        >
-          <option value="1st">1st Semester</option>
-          <option value="2nd">2nd Semester</option>
-        </FormSelect>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        <FormSelect
-          label="Faculty"
-          icon={Building2}
-          value={form.faculty}
-          onChange={(e) =>
-            setForm({ ...form, faculty: e.target.value, department: "" })
-          }
-        >
-          <option value="">Select Faculty...</option>
-          {faculties.map((f) => (
-            <option key={f.id} value={f.id}>
-              {f.name}
-            </option>
-          ))}
-        </FormSelect>
-        <FormSelect
-          label="Department"
-          icon={Building2}
-          disabled={!form.faculty || departments.length === 0}
-          value={form.department}
-          onChange={(e) => setForm({ ...form, department: e.target.value })}
-        >
-          <option value="">Select Department...</option>
-          {departments.map((d) => (
-            <option key={d.id} value={d.id}>
-              {d.name}
-            </option>
-          ))}
-        </FormSelect>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="col-span-1">
-          <FormSelect
-            label="Level"
-            icon={Layers}
-            value={form.level}
-            onChange={(e) => setForm({ ...form, level: e.target.value })}
-          >
-            <option value="100">100</option>
-            <option value="200">200</option>
-            <option value="300">300</option>
-            <option value="400">400</option>
-            <option value="500">500</option>
-            <option value="600">600</option>
-            <option value="700">700</option>
-          </FormSelect>
-        </div>
-
-        <div className="col-span-1">
+      {/* 1. Course Basic Info */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <div className="space-y-6">
           <FormInput
             label="Course Code"
             icon={BookOpen}
             placeholder="e.g. CSC 101"
             value={form.courseCode}
-            onChange={(e) => setForm({ ...form, courseCode: e.target.value })}
+            onChange={(e) =>
+              setForm({ ...form, courseCode: e.target.value.toUpperCase() })
+            }
           />
-        </div>
-        <div className="col-span-1">
           <FormInput
             label="Course Title"
             icon={Presentation}
-            placeholder="e.g. Intro to Computer Science"
+            placeholder="e.g. Intro to Computing"
             value={form.courseTitle}
             onChange={(e) => setForm({ ...form, courseTitle: e.target.value })}
           />
         </div>
+        <div className="grid grid-cols-2 gap-4">
+          <FormSelect
+            label="Session"
+            value={form.session}
+            onChange={(e) => setForm({ ...form, session: e.target.value })}
+          >
+            <option>2024/2025</option>
+            <option>2025/2026</option>
+          </FormSelect>
+          <FormSelect
+            label="Semester"
+            value={form.semester}
+            onChange={(e) => setForm({ ...form, semester: e.target.value })}
+          >
+            <option value="1st">1st Semester</option>
+            <option value="2nd">2nd Semester</option>
+          </FormSelect>
+          <div className="col-span-2">
+            <FormSelect
+              label="Target Level"
+              icon={Layers}
+              value={form.level}
+              onChange={(e) => setForm({ ...form, level: e.target.value })}
+            >
+              <option>100</option>
+              <option>200</option>
+              <option>300</option>
+              <option>400</option>
+              <option>500</option>
+            </FormSelect>
+          </div>
+        </div>
       </div>
 
-      <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 flex gap-4 items-center mb-8">
-        <div className="bg-amber-100 p-2 rounded-lg text-amber-700">
-          <User size={20} />
+      <hr className="my-8 border-gray-100" />
+
+      {/* 2. Multi-Target Assignment Area */}
+      <div className="bg-slate-50 rounded-[2rem] p-6 border border-slate-100">
+        <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+          <Building2 size={14} /> Assign to Departments
+        </h4>
+
+        <div className="flex flex-col md:flex-row gap-4 items-end mb-6">
+          <div className="flex-1 w-full">
+            <FormSelect
+              label="Select Faculty"
+              value={tempFaculty}
+              onChange={(e) => setTempFaculty(e.target.value)}
+            >
+              <option value="">-- Choose Faculty --</option>
+              {faculties.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name}
+                </option>
+              ))}
+            </FormSelect>
+          </div>
+          <div className="flex-1 w-full">
+            <FormSelect
+              label="Select Department"
+              value={tempDept}
+              disabled={!tempFaculty}
+              onChange={(e) => setTempDept(e.target.value)}
+            >
+              <option value="">-- Choose Department --</option>
+              {departments.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+            </FormSelect>
+          </div>
+          <button
+            type="button"
+            onClick={addTarget}
+            className="h-12 px-6 bg-slate-900 text-white rounded-xl font-bold hover:bg-black transition-all flex items-center gap-2"
+          >
+            <UserPlus size={18} /> Add
+          </button>
         </div>
-        <div>
-          <p className="text-xs font-bold uppercase text-amber-600 tracking-wider">
-            Instructor Assignment
-          </p>
-          <p className="text-sm text-amber-900 font-medium">
-            This course will be assigned to:{" "}
-            <strong>
-              {currentUser.title} {currentUser.firstName} {currentUser.lastName}
-            </strong>
-          </p>
+
+        {/* List of Selected Departments */}
+        <div className="flex flex-wrap gap-2 mt-4">
+          {selectedTargets.map((target, idx) => (
+            <div
+              key={idx}
+              className="bg-white border border-slate-200 pl-4 pr-2 py-2 rounded-2xl flex items-center gap-3 shadow-sm animate-zoom-in"
+            >
+              <div className="leading-tight">
+                {/* Use 'target.faculty' and 'target.department' here */}
+                <p className="text-[10px] font-black text-blue-600 uppercase">
+                  {target.faculty}
+                </p>
+                <p className="text-xs font-bold text-slate-800">
+                  {target.department}
+                </p>
+              </div>
+              <button
+                onClick={() => removeTarget(idx)}
+                className="p-1.5 hover:bg-red-50 text-slate-300 hover:text-red-500 rounded-lg transition-colors"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          ))}
         </div>
       </div>
 
-      <div className="flex justify-end">
+      {/* Submit */}
+      <div className="mt-10 flex flex-col md:flex-row justify-between items-center gap-6 pt-6 border-t border-gray-100">
+        <div className="flex items-center gap-3 text-amber-600 bg-amber-50 px-4 py-2 rounded-xl border border-amber-100">
+          <AlertCircle size={16} />
+          <p className="text-xs font-bold uppercase tracking-tight">
+            Creating {selectedTargets.length} course instance(s)
+          </p>
+        </div>
         <div className="w-full md:w-1/3">
           <Button
             onClick={handleSubmit}
             loading={loading}
-            disabled={!form.courseCode || !form.courseTitle}
-            colorClass="bg-amber-600 hover:bg-amber-700"
+            disabled={selectedTargets.length === 0}
+            colorClass="bg-blue-600 hover:bg-blue-700 py-4 shadow-xl shadow-blue-200"
           >
-            <BookOpen size={18} /> Create Course
+            <Check size={18} /> Batch Create Courses
           </Button>
         </div>
       </div>
@@ -1905,7 +2056,7 @@ function LecturerActions({ currentUser }) {
   const [selDept, setSelDept] = useState("");
   const [selectedClassId, setSelectedClassId] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 5; 
+  const itemsPerPage = 5;
 
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -1939,11 +2090,11 @@ function LecturerActions({ currentUser }) {
       setDepartments([]);
       setSelDept("");
     }
-    setCurrentPage(1); 
+    setCurrentPage(1);
   }, [selFac]);
 
   useEffect(() => {
-    setCurrentPage(1); 
+    setCurrentPage(1);
   }, [selDept]);
 
   // 3. Filter & Pagination Logic
@@ -2266,37 +2417,44 @@ function ExamOfficerPortal() {
       setAvailableCourses([]);
       return;
     }
+
     const fetchCourses = async () => {
       setLoadingCourses(true);
       try {
-        const selectedDept = departments.find((d) => d.id === filters.deptId);
-        if (!selectedDept) return;
-
-        // Fetch courses for this department
-        const lecRes = await axios.get(
-          `${API_URL}/meta/lecturers?department=${selectedDept.name}`
+        // 🔍 1. Resolve the Name string for the selected Department ID
+        const selectedDeptObj = departments.find(
+          (d) => d.id === filters.deptId
         );
-        const classPromises = lecRes.data.map((l) =>
-          axios.get(`${API_URL}/meta/classes?lecturerId=${l.id}`)
-        );
-        const classResults = await Promise.all(classPromises);
+        const deptName = selectedDeptObj ? selectedDeptObj.name : "";
 
-        // Filter by Session/Semester/Level
-        const filtered = classResults
-          .flatMap((r) => r.data)
-          .filter(
-            (c) =>
-              c.session === filters.session &&
-              c.semester === filters.semester &&
-              c.level === filters.level
-          );
+        // 2. Fetch all classes
+        // Ensure your backend endpoint is: GET /attendance/meta/all-classes
+        const res = await axios.get(`${API_URL}/meta/all-classes`);
+
+        // 3. Filter using Case-Insensitive Name matching
+        const filtered = res.data.filter((c) => {
+          // Normalize names to prevent issues with spaces or casing
+          const dbDept = (c.department || "").toString().trim().toLowerCase();
+          const targetDept = deptName.trim().toLowerCase();
+
+          const deptMatch = dbDept === targetDept;
+          const sessionMatch = c.session === filters.session;
+          const semesterMatch = c.semester === filters.semester;
+          const levelMatch = String(c.level) === String(filters.level);
+
+          return deptMatch && sessionMatch && semesterMatch && levelMatch;
+        });
+
+        console.log("Filtered Results:", filtered); // Check your console to see if any match
         setAvailableCourses(filtered);
       } catch (err) {
+        console.error("Course fetch error:", err);
         setAvailableCourses([]);
       } finally {
         setLoadingCourses(false);
       }
     };
+
     fetchCourses();
   }, [
     filters.deptId,
@@ -2305,49 +2463,59 @@ function ExamOfficerPortal() {
     filters.level,
     departments,
   ]);
-
   // --- LOGIC: Group Duplicate Courses for Dropdown ---
-  const uniqueCourses = [];
-  const seenCodes = new Set();
+const uniqueCourses = [];
+const seenKeys = new Set();
 
-  availableCourses.forEach((c) => {
-    const cleanCode = normalizeCode(c.courseCode || c.course);
-    if (!seenCodes.has(cleanCode)) {
-      seenCodes.add(cleanCode);
-      uniqueCourses.push(c);
-    }
-  });
-
- /// 5. GENERATE REPORT
-const generateReport = async () => {
-  if (!filters.courseId) {
-    toast.error("Please select a course first.");
-    return;
+availableCourses.forEach((c) => {
+  // Create a unique key using Code + Department
+  const key = `${c.courseCode}-${c.department}`; 
+  if (!seenKeys.has(key)) {
+    seenKeys.add(key);
+    uniqueCourses.push(c);
   }
-  setLoadingReport(true);
+});
 
-  try {
-    // ✅ Use 'lectureId' parameter to match the backend expectation
-    const res = await axios.get(`${API_URL}/admin/report?lectureId=${filters.courseId}`);
-    
-    const data = res.data;
+// Update the JSX to show the department name in the dropdown
+{uniqueCourses.map((c) => (
+  <option key={c.id} value={c.id}>
+    {c.courseCode} - {c.courseTitle} ({c.department})
+  </option>
+))}
 
-    // Check if the backend returned a list
-    if (!data.students || data.students.length === 0) {
-      toast.error("No one has marked attendance for this course yet.");
+  /// 5. GENERATE REPORT
+  const generateReport = async () => {
+    if (!filters.courseId) {
+      toast.error("Please select a course first.");
+      return;
+    }
+    setLoadingReport(true);
+
+    try {
+      // ✅ Use 'lectureId' parameter to match the backend expectation
+      const res = await axios.get(
+        `${API_URL}/admin/report?lectureId=${filters.courseId}`
+      );
+
+      const data = res.data;
+
+      // Check if the backend returned a list
+      if (!data.students || data.students.length === 0) {
+        toast.error("No one has marked attendance for this course yet.");
+        setReport(null);
+      } else {
+        setReport(data);
+        toast.success("Report Generated!");
+      }
+    } catch (err) {
+      console.error("Report Error:", err);
+      toast.error("Error connecting to server.");
       setReport(null);
-    } else {
-      setReport(data);
-      toast.success("Report Generated!");
+    } finally {
+      setLoadingReport(false);
     }
-  } catch (err) {
-    console.error("Report Error:", err);
-    toast.error("Error connecting to server.");
-    setReport(null);
-  } finally {
-    setLoadingReport(false);
-  }
-};
+  };
+
   // 📥 EXCEL DOWNLOAD FUNCTION
   const downloadExcel = () => {
     if (!report || !report.students.length) {
@@ -2582,7 +2750,7 @@ const generateReport = async () => {
             <option value="">-- Select Course to Check --</option>
             {uniqueCourses.map((c) => (
               <option key={c.id} value={c.id}>
-                {c.courseCode || c.course}
+                {c.courseCode || c.courseTitle}
               </option>
             ))}
           </FormSelect>

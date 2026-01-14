@@ -320,60 +320,63 @@ export class AttendanceService {
 
   // A. Exam Eligibility Report
 async getCourseReport(lectureId: string) {
-  // 1. Get the course metadata to know which Department/Level to look for
-  const lecture = await this.lectureRepo.findOne({ where: { id: lectureId } });
-  if (!lecture) throw new BadRequestException('Course not found');
+  // 1. Get the specific lecture record to know which Dept/Faculty we are reporting on
+  const referenceLecture = await this.lectureRepo.findOne({ where: { id: lectureId } });
+  if (!referenceLecture) throw new BadRequestException('Course not found');
 
-  // 2. Count ACTUAL sessions started (The denominator for 80%)
-  const totalSessionsHeld = await this.sessionRepo.count({
-    where: { lecture: { id: lectureId } }
-  });
+  const { courseCode, department, level } = referenceLecture;
 
-  // 3. Find ALL students who SHOULD be in this class (Registry-based)
-  // This ensures students with 0 attendance still show up in the report
+  // 2. Count sessions held ONLY for this Course Code AND this Department
+  // This prevents sessions activated for "Mechanical Eng" from counting against "Computer Science"
+  const totalSessionsHeld = await this.sessionRepo
+    .createQueryBuilder('session')
+    .leftJoin('session.lecture', 'lecture')
+    .where('lecture.courseCode = :courseCode', { courseCode })
+    .andWhere('lecture.department = :department', { department })
+    .getCount();
+
+  // 3. Find Students strictly in this Department and Level
   const students = await this.studentRepo.find({
     where: { 
-      department: lecture.department, 
-      level: lecture.level 
-    }
+      department: department, 
+      level: level 
+    },
+    order: { lastName: 'ASC' }
   });
 
-  if (students.length === 0) {
-    throw new BadRequestException(`No students registered in ${lecture.department} at ${lecture.level} level.`);
-  }
-
-  // 4. Map the students to their attendance counts
+  // 4. Map students to their attendance
   const studentList = await Promise.all(students.map(async (student) => {
-    const attendedCount = await this.attendanceRepo.count({
-      where: { 
-        student: { id: student.id }, 
-        lecture: { id: lectureId } 
-      }
-    });
+    // Count attendance ONLY for this Course Code AND this Department
+    const attendedCount = await this.attendanceRepo
+      .createQueryBuilder('attendance')
+      .leftJoin('attendance.lecture', 'lecture')
+      .where('attendance.studentId = :studentId', { studentId: student.id })
+      .andWhere('lecture.courseCode = :courseCode', { courseCode })
+      .andWhere('lecture.department = :department', { department })
+      .getCount();
 
-    const percentage = totalSessionsHeld > 0 
-      ? (attendedCount / totalSessionsHeld) * 100 
-      : 0;
+    const total = totalSessionsHeld;
+    const percentage = total > 0 ? (attendedCount / total) * 100 : 0;
 
     return {
       firstName: student.firstName,
       lastName: student.lastName,
       matricNumber: student.matricNumber,
       attended: attendedCount,
-      total: totalSessionsHeld,
+      total: total,
       percentage: percentage.toFixed(1),
-      isEligible: percentage >= 80 // Threshold check
+      isEligible: total === 0 ? true : percentage >= 80, // Eligible if no classes held yet
     };
   }));
 
   return {
-    courseTitle: lecture.courseTitle,
-    courseCode: lecture.courseCode,
+    courseTitle: referenceLecture.courseTitle,
+    courseCode: courseCode,
+    department: department, // Added for clarity in UI
     totalClasses: totalSessionsHeld,
-    students: studentList.sort((a, b) => a.lastName.localeCompare(b.lastName)),
+    students: studentList,
   };
 }
-
   async getMetrics() {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
@@ -579,4 +582,46 @@ async getCourseReport(lectureId: string) {
       isEligible: percentage >= 80,
     };
   }
+
+  async bulkPromoteStudents(studentIds: string[], newLevel: string) {
+  if (!studentIds.length) throw new BadRequestException('No students selected');
+  
+  return this.studentRepo
+    .createQueryBuilder()
+    .update(Student)
+    .set({ level: newLevel })
+    .whereInIds(studentIds)
+    .execute();
+}
+
+async bulkCreateLectures(data: any) {
+  const { targets, lecturerId, ...courseInfo } = data;
+  const lecturer = await this.lecturerRepo.findOne({ where: { id: lecturerId } });
+
+  if (!lecturer) throw new NotFoundException('Lecturer not found');
+
+  const lectureEntities: Lecture[] = targets.map((target: any) => {
+    // We explicitly create the entity and map the strings
+    return this.lectureRepo.create({
+      courseCode: courseInfo.courseCode,
+      courseTitle: courseInfo.courseTitle,
+      level: courseInfo.level,
+      session: courseInfo.session,
+      semester: courseInfo.semester,
+      faculty: target.faculty,      
+      department: target.department, 
+      lecturer: lecturer,
+      isActive: false,
+      classDateTime: new Date(),
+    });
+  });
+
+  return this.lectureRepo.save(lectureEntities);
+}
+async getAllLectures() {
+  return this.lectureRepo.find({
+    relations: ['lecturer'],
+    order: { courseCode: 'ASC' }
+  });
+}
 }
