@@ -222,4 +222,14 @@ async getAllClasses() {
   // This allows the Exam Officer to see courses from ALL lecturers
   return this.service.getAllLectures();
 }
+
+@Post('admin/student/bulk')
+async bulkStudents(@Body() body: any[]) {
+  return this.service.bulkCreateStudents(body);
+}
+
+@Post('admin/staff/bulk')
+async bulkStaff(@Body() body: any[]) {
+  return this.service.bulkCreateStaff(body);
+}
 }
