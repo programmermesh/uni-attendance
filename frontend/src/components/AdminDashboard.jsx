@@ -44,6 +44,7 @@ import {
   useToast,
   Label,
 } from "./Shared";
+import * as XLSX from "xlsx";
 
 // ============================================================================
 // STYLING COMPONENTS (Unchanged)
@@ -533,7 +534,7 @@ function DashboardOverview() {
         />
       </div>
 
-      {/* 📥 BULK ACTION BAR */}
+      {/* BULK ACTION BAR */}
       {selectedIds.length > 0 && (
         <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[60] w-full max-w-xl px-4">
           <div className="bg-slate-900 text-white rounded-2xl p-4 shadow-2xl flex items-center justify-between border border-white/10 backdrop-blur-lg">
@@ -570,7 +571,7 @@ function DashboardOverview() {
         </div>
       )}
 
-      {/* 🏢 STUDENT DIRECTORY CARD */}
+      {/* STUDENT DIRECTORY CARD */}
       <Card
         title="Student Directory"
         subtitle="Manage university students"
@@ -946,7 +947,6 @@ function LecturerList() {
     }
   }, [selectedFacId]);
 
-  // ✅ FIXED: Fetch departments when the FACULTY in the EDIT MODAL changes
   useEffect(() => {
     if (editingLecturer?.faculty) {
       const selectedFac = faculties.find(
@@ -1295,6 +1295,7 @@ function ManageStructure() {
     fetchFaculties();
   }, []);
 
+  // ✅ Fixed using arrow function syntax to avoid "Unexpected keyword" errors
   const createFaculty = async () => {
     if (!newFaculty) return;
     setLoadingFac(true);
@@ -1310,6 +1311,7 @@ function ManageStructure() {
     }
   };
 
+  // ✅ Fixed using arrow function syntax
   const createDept = async () => {
     if (!newDept.facultyId || !newDept.name) return;
     setLoadingDept(true);
@@ -1425,12 +1427,15 @@ function RegisterStaff() {
   const [faculties, setFaculties] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [bulkLoading, setBulkLoading] = useState(false);
+  const [uploadResults, setUploadResults] = useState(null);
 
   useEffect(() => {
     axios
       .get(`${API_URL}/meta/faculties-list`)
       .then((res) => setFaculties(res.data));
   }, []);
+
   useEffect(() => {
     if (form.faculty)
       axios
@@ -1440,20 +1445,87 @@ function RegisterStaff() {
   }, [form.faculty]);
 
   const handleSubmit = async () => {
+    if (!form.email || !form.firstName)
+      return toast.error("Email and Name required");
     setLoading(true);
+    const facultyName =
+      faculties.find((f) => f.id === form.faculty)?.name || form.faculty;
+    const deptName =
+      departments.find((d) => d.id === form.department)?.name ||
+      form.department;
+
+    let endpoint =
+      roleType === "lecturer"
+        ? "admin/lecturer"
+        : roleType === "admin"
+        ? "admin/create-admin"
+        : "admin/create-exam-officer";
+
     try {
-      await axios.post(`${API_URL}/admin/lecture/bulk`, {
+      await axios.post(`${API_URL}/${endpoint}`, {
         ...form,
-        lecturerId: currentUser.id,
-        targets: selectedTargets, // This is now an array of {faculty, department} strings
+        faculty: facultyName,
+        department: deptName,
+        role: roleType,
       });
-      toast.success("Courses created!");
-      setSelectedTargets([]);
+      toast.success(`${roleType.replace("_", " ")} created successfully!`);
+      setForm({
+        ...form,
+        firstName: "",
+        lastName: "",
+        email: "",
+        phoneNumber: "",
+      });
     } catch (err) {
-      toast.error("Failed to create courses");
+      toast.error("Action Failed");
     } finally {
       setLoading(false);
     }
+  };
+
+  const downloadTemplate = () => {
+    const headers = [
+      [
+        "title",
+        "firstName",
+        "lastName",
+        "email",
+        "role",
+        "faculty",
+        "department",
+        "phoneNumber",
+        "password",
+      ],
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(headers);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Template");
+    XLSX.writeFile(wb, `staff_upload_template.xlsx`);
+  };
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      setBulkLoading(true);
+      setUploadResults(null);
+      try {
+        const bstr = evt.target.result;
+        const wb = XLSX.read(bstr, { type: "binary" });
+        const wsname = wb.SheetNames[0];
+        const data = XLSX.utils.sheet_to_json(wb.Sheets[wsname]);
+        const res = await axios.post(`${API_URL}/admin/staff/bulk`, data);
+        setUploadResults(res.data);
+        toast.success("Import complete.");
+      } catch (err) {
+        toast.error("Bulk upload failed.");
+      } finally {
+        setBulkLoading(false);
+        e.target.value = null;
+      }
+    };
+    reader.readAsBinaryString(file);
   };
 
   const defaultPassword =
@@ -1464,15 +1536,14 @@ function RegisterStaff() {
       : "password123";
 
   return (
-    <div className="animate-fade-in-up w-full">
-      <Card
-        title="Staff Registration"
-        subtitle="Create accounts for university staff"
-        color={roleType === "admin" ? "border-red-500" : "border-blue-500"}
-        className="w-full"
-      >
-        <div className="bg-slate-50 p-2 rounded-xl mb-8 w-full max-w-2xl mx-auto border border-slate-100">
-          <div className="grid grid-cols-3 gap-2">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="lg:col-span-2 space-y-6">
+        <Card
+          title="Staff Registration"
+          subtitle="Create accounts for university staff"
+          color={roleType === "admin" ? "border-red-500" : "border-blue-500"}
+        >
+          <div className="bg-slate-50 p-2 rounded-xl mb-8 border border-slate-100 grid grid-cols-3 gap-2">
             <RoleTab
               label="Lecturer"
               icon={<Presentation size={14} />}
@@ -1492,146 +1563,219 @@ function RegisterStaff() {
               onClick={() => setRoleType("admin")}
             />
           </div>
-        </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
-          <div className="space-y-6">
-            <div className="flex gap-4">
-              {roleType === "lecturer" && (
-                <div className="w-1/3">
-                  <FormSelect
-                    label="Title"
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-6">
+              <div className="flex gap-4">
+                {roleType === "lecturer" && (
+                  <div className="w-1/3">
+                    <FormSelect
+                      label="Title"
+                      value={form.title}
+                      onChange={(e) =>
+                        setForm({ ...form, title: e.target.value })
+                      }
+                    >
+                      <option>Dr.</option>
+                      <option>Prof.</option>
+                      <option>Mr.</option>
+                      <option>Mrs.</option>
+                    </FormSelect>
+                  </div>
+                )}
+                <div className="flex-1">
+                  <FormInput
+                    label="First Name"
                     icon={User}
-                    value={form.title}
+                    value={form.firstName}
                     onChange={(e) =>
-                      setForm({ ...form, title: e.target.value })
+                      setForm({ ...form, firstName: e.target.value })
                     }
-                  >
-                    <option>Dr.</option>
-                    <option>Prof.</option>
-                    <option>Mr.</option>
-                    <option>Mrs.</option>
-                  </FormSelect>
+                  />
                 </div>
-              )}
-              <div className="flex-1">
-                <FormInput
-                  label="First Name"
-                  icon={User}
-                  value={form.firstName}
-                  onChange={(e) =>
-                    setForm({ ...form, firstName: e.target.value })
-                  }
-                />
               </div>
-            </div>
-            <FormInput
-              label="Middle Name"
-              icon={User}
-              value={form.middleName}
-              onChange={(e) => setForm({ ...form, middleName: e.target.value })}
-            />
-            <FormInput
-              label="Email Address"
-              icon={Mail}
-              type="email"
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-            />
-          </div>
-
-          <div className="space-y-6">
-            <FormInput
-              label="Last Name"
-              icon={User}
-              value={form.lastName}
-              onChange={(e) => setForm({ ...form, lastName: e.target.value })}
-            />
-            {roleType === "lecturer" ? (
               <FormInput
-                label="Phone Number"
-                icon={Phone}
-                value={form.phoneNumber}
+                label="Middle Name"
+                icon={User}
+                value={form.middleName}
                 onChange={(e) =>
-                  setForm({ ...form, phoneNumber: e.target.value })
+                  setForm({ ...form, middleName: e.target.value })
                 }
               />
-            ) : (
-              <div className="p-6 rounded-xl border bg-slate-50 border-slate-200 flex gap-4 items-center mt-1">
-                <div className="bg-white p-3 rounded-lg border border-slate-100 shadow-sm text-slate-500">
-                  <Lock size={20} />
-                </div>
-                <div>
-                  <p className="text-xs font-bold uppercase text-slate-500 tracking-wider">
-                    Security Notice
-                  </p>
-                  <p className="text-sm text-slate-600 mt-1">
-                    Default Password:{" "}
-                    <strong className="font-mono text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200 ml-1">
+              <FormInput
+                label="Email Address"
+                icon={Mail}
+                type="email"
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+              />
+            </div>
+            <div className="space-y-6">
+              <FormInput
+                label="Last Name"
+                icon={User}
+                value={form.lastName}
+                onChange={(e) => setForm({ ...form, lastName: e.target.value })}
+              />
+              {roleType === "lecturer" ? (
+                <FormInput
+                  label="Phone Number"
+                  icon={Phone}
+                  value={form.phoneNumber}
+                  onChange={(e) =>
+                    setForm({ ...form, phoneNumber: e.target.value })
+                  }
+                />
+              ) : (
+                <div className="p-6 rounded-xl border bg-slate-50 border-slate-200 flex gap-4 items-center">
+                  <Lock className="text-slate-400" size={20} />
+                  <div>
+                    <p className="text-[10px] font-bold uppercase text-slate-500">
+                      Default Password
+                    </p>
+                    <p className="text-sm font-mono font-bold text-blue-600">
                       {defaultPassword}
-                    </strong>
-                  </p>
+                    </p>
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {roleType === "lecturer" && (
-          <div className="mt-8 pt-8 border-t border-gray-100">
-            <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-6">
-              Academic Assignment
-            </h4>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
-              <FormSelect
-                label="Faculty"
-                icon={Building2}
-                value={form.faculty}
-                onChange={(e) => setForm({ ...form, faculty: e.target.value })}
-              >
-                <option value="">Select Faculty...</option>
-                {faculties.map((f) => (
-                  <option key={f.id} value={f.id}>
-                    {f.name}
-                  </option>
-                ))}
-              </FormSelect>
-              <FormSelect
-                label="Department"
-                icon={Building2}
-                disabled={!form.faculty}
-                value={form.department}
-                onChange={(e) =>
-                  setForm({ ...form, department: e.target.value })
-                }
-              >
-                <option value="">Select Department...</option>
-                {departments.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                  </option>
-                ))}
-              </FormSelect>
+              )}
             </div>
           </div>
-        )}
 
-        <div className="mt-10 flex justify-end pt-6 border-t border-gray-100">
-          <div className="w-full lg:w-1/3">
+          {roleType === "lecturer" && (
+            <div className="mt-8 pt-8 border-t border-gray-100">
+              <h4 className="text-xs font-bold text-gray-400 uppercase mb-6 tracking-widest">
+                Academic Assignment
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <FormSelect
+                  label="Faculty"
+                  value={form.faculty}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      faculty: e.target.value,
+                      department: "",
+                    })
+                  }
+                >
+                  <option value="">Select Faculty...</option>
+                  {faculties.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.name}
+                    </option>
+                  ))}
+                </FormSelect>
+                <FormSelect
+                  label="Department"
+                  disabled={!form.faculty}
+                  value={form.department}
+                  onChange={(e) =>
+                    setForm({ ...form, department: e.target.value })
+                  }
+                >
+                  <option value="">Select Department...</option>
+                  {departments.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}
+                    </option>
+                  ))}
+                </FormSelect>
+              </div>
+            </div>
+          )}
+          <div className="mt-10 flex justify-end">
             <Button
               onClick={handleSubmit}
               loading={loading}
               colorClass={
                 roleType === "admin"
-                  ? "bg-slate-900 hover:bg-black"
-                  : "bg-blue-600 hover:bg-blue-700"
+                  ? "bg-slate-900 hover:bg-black w-full md:w-1/3"
+                  : "bg-blue-600 hover:bg-blue-700 w-full md:w-1/3"
               }
             >
-              <UserPlus size={20} /> Create Account
+              Create {roleType.replace("_", " ")}
             </Button>
           </div>
+        </Card>
+
+        {uploadResults && (
+          <Card
+            title="Staff Import Summary"
+            subtitle="Details of the bulk operation"
+          >
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <div className="p-4 bg-green-50 rounded-2xl border border-green-100 text-center text-green-700">
+                <p className="text-[10px] font-bold uppercase">Success</p>
+                <p className="text-2xl font-black">
+                  {uploadResults.successfullyCreated?.length || 0}
+                </p>
+              </div>
+              <div className="p-4 bg-red-50 rounded-2xl border border-red-100 text-center text-red-700">
+                <p className="text-[10px] font-bold uppercase">Failed</p>
+                <p className="text-2xl font-black">
+                  {uploadResults.failedRecords?.length || 0}
+                </p>
+              </div>
+            </div>
+            {uploadResults.failedRecords.map((err, i) => (
+              <div
+                key={i}
+                className="p-3 text-xs flex justify-between bg-white items-center"
+              >
+                <span className="font-bold text-slate-700">
+                  {err.identifier}
+                </span>
+                <span className="text-red-500 font-medium italic">
+                  {err.reason}
+                </span>
+              </div>
+            ))}
+            <Button
+              onClick={() => setUploadResults(null)}
+              colorClass="mt-4 bg-slate-100 text-slate-600 w-full"
+            >
+              Dismiss
+            </Button>
+          </Card>
+        )}
+      </div>
+
+      <div className="space-y-6">
+        <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-2xl border border-slate-800 space-y-6">
+          <div className="text-center space-y-2">
+            <div className="w-16 h-16 bg-blue-500/20 text-blue-400 rounded-3xl flex items-center justify-center mx-auto border border-blue-500/30">
+              <Users size={32} />
+            </div>
+            <h3 className="text-xl font-black">Staff Bulk Upload</h3>
+            <p className="text-xs text-slate-400 italic">
+              Import multiple roles at once.
+            </p>
+          </div>
+          <button
+            onClick={downloadTemplate}
+            className="w-full py-4 bg-slate-800 text-slate-300 rounded-2xl text-xs font-bold uppercase hover:bg-slate-700 transition-all border border-slate-700 flex items-center justify-center gap-2"
+          >
+            <Download size={18} /> Get Excel Template
+          </button>
+          <label className="w-full py-4 bg-blue-600 text-white rounded-2xl text-xs font-black uppercase hover:bg-blue-500 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-blue-900/50">
+            <input
+              type="file"
+              className="hidden"
+              accept=".xlsx, .xls"
+              onChange={handleFileUpload}
+              disabled={bulkLoading}
+            />
+            {bulkLoading ? (
+              <Loader2 className="animate-spin" size={18} />
+            ) : (
+              <>
+                <ArrowRight size={18} /> Upload Filled Excel
+              </>
+            )}
+          </label>
         </div>
-      </Card>
+      </div>
     </div>
   );
 }
@@ -1648,18 +1792,21 @@ function ManageStudents() {
     matricNumber: "",
     faculty: "",
     department: "",
-    sex: "Male",
-    level: "100",
+    sex: "",
+    level: "",
   });
   const [loading, setLoading] = useState(false);
+  const [bulkLoading, setBulkLoading] = useState(false);
   const [faculties, setFaculties] = useState([]);
   const [departments, setDepartments] = useState([]);
+  const [uploadResults, setUploadResults] = useState(null);
 
   useEffect(() => {
     axios
       .get(`${API_URL}/meta/faculties-list`)
       .then((res) => setFaculties(res.data));
   }, []);
+
   useEffect(() => {
     if (form.faculty)
       axios
@@ -1669,6 +1816,9 @@ function ManageStudents() {
   }, [form.faculty]);
 
   const handleSubmit = async () => {
+    if (!form.firstName || !form.lastName || !form.matricNumber || !form.faculty || !form.department || !form.level || !form.sex) {
+      return toast.error("Please fill required fields");
+    }
     setLoading(true);
     const facultyName =
       faculties.find((f) => f.id === form.faculty)?.name || form.faculty;
@@ -1683,7 +1833,7 @@ function ManageStudents() {
         department: deptName,
       });
       toast.success("Student Registered Successfully!");
-      setForm({ ...form, firstName: "", lastName: "", matricNumber: "" });
+      setForm({ ...form, firstName: "", lastName: "", matricNumber: "" , faculty: "" , department: "", level: "", sex: ""});
     } catch (err) {
       toast.error("Registration Failed");
     } finally {
@@ -1691,99 +1841,233 @@ function ManageStudents() {
     }
   };
 
+  const downloadTemplate = () => {
+    const headers = [
+      [
+        "firstName",
+        "lastName",
+        "middleName",
+        "matricNumber",
+        "faculty",
+        "department",
+        "level",
+        "sex",
+      ],
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(headers);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Template");
+    XLSX.writeFile(wb, `student_upload_template.xlsx`);
+  };
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      setBulkLoading(true);
+      setUploadResults(null);
+      try {
+        const bstr = evt.target.result;
+        const wb = XLSX.read(bstr, { type: "binary" });
+        const wsname = wb.SheetNames[0];
+        const data = XLSX.utils.sheet_to_json(wb.Sheets[wsname]);
+        const res = await axios.post(`${API_URL}/admin/student/bulk`, data);
+        setUploadResults(res.data);
+        toast.success("Bulk processing finished.");
+      } catch (err) {
+        toast.error("Upload failed.");
+      } finally {
+        setBulkLoading(false);
+        e.target.value = null;
+      }
+    };
+    reader.readAsBinaryString(file);
+  };
+
   return (
-    <Card
-      title="New Student"
-      subtitle="Add student to the system registry"
-      className="w-full"
-    >
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        <FormInput
-          label="First Name"
-          icon={User}
-          value={form.firstName}
-          onChange={(e) => setForm({ ...form, firstName: e.target.value })}
-        />
-        <FormInput
-          label="Last Name"
-          icon={User}
-          value={form.lastName}
-          onChange={(e) => setForm({ ...form, lastName: e.target.value })}
-        />
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="lg:col-span-2 space-y-6">
+        <Card title="New Student" subtitle="Add student to the system registry">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <FormInput
+              label="First Name"
+              icon={User}
+              value={form.firstName}
+              onChange={(e) => setForm({ ...form, firstName: e.target.value })}
+            />
+            <FormInput
+              label="Last Name"
+              icon={User}
+              value={form.lastName}
+              onChange={(e) => setForm({ ...form, lastName: e.target.value })}
+            />
+          </div>
+          <div className="mb-6">
+            <FormInput
+              label="Matriculation Number"
+              icon={Shield}
+              placeholder="UNI/2025/..."
+              value={form.matricNumber}
+              onChange={(e) =>
+                setForm({ ...form, matricNumber: e.target.value })
+              }
+            />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <FormSelect
+              label="Faculty"
+              icon={Building2}
+              value={form.faculty}
+              onChange={(e) =>
+                setForm({ ...form, faculty: e.target.value, department: "" })
+              }
+            >
+              <option value="">Select Faculty...</option>
+              {faculties.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name}
+                </option>
+              ))}
+            </FormSelect>
+            <FormSelect
+              label="Department"
+              icon={Building2}
+              disabled={!form.faculty}
+              value={form.department}
+              onChange={(e) => setForm({ ...form, department: e.target.value })}
+            >
+              <option value="">Select Department...</option>
+              {departments.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+            </FormSelect>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <FormSelect
+              label="Level"
+              icon={BookOpen}
+              value={form.level}
+              onChange={(e) => setForm({ ...form, level: e.target.value })}
+            >
+                <option value="">Select Level...</option>
+              <option>100</option>
+              <option>200</option>
+              <option>300</option>
+              <option>400</option>
+              <option>500</option>
+              <option>600</option>
+              <option>700</option>
+            </FormSelect>
+            <FormSelect
+              label="Gender"
+              icon={Users}
+              value={form.sex}
+              onChange={(e) => setForm({ ...form, sex: e.target.value })}
+            >
+              <option value="">Select Gender...</option>
+              <option>Male</option>
+              <option value="Female">Female</option>
+            </FormSelect>
+          </div>
+          <div className="flex justify-end">
+            <Button
+              onClick={handleSubmit}
+              loading={loading}
+              colorClass="bg-emerald-600 hover:bg-emerald-700 w-full md:w-1/3"
+            >
+              <UserPlus size={18} /> Register Student
+            </Button>
+          </div>
+        </Card>
+
+        {uploadResults && (
+          <Card title="Upload Summary" subtitle="Check for skipped records">
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <div className="p-4 bg-green-50 rounded-2xl border border-green-100 text-center">
+                <p className="text-[10px] font-bold text-green-600 uppercase">
+                  Successfully Added
+                </p>
+                <p className="text-2xl font-black text-green-700">
+                  {uploadResults.successfullyCreated?.length || 0}
+                </p>
+              </div>
+              <div className="p-4 bg-red-50 rounded-2xl border border-red-100 text-center">
+                <p className="text-[10px] font-bold text-red-600 uppercase">
+                  Errors/Duplicates
+                </p>
+                <p className="text-2xl font-black text-red-700">
+                  {uploadResults.failedRecords?.length || 0}
+                </p>
+              </div>
+            </div>
+            {uploadResults.failedRecords?.length > 0 && (
+              <div className="max-h-48 overflow-y-auto border rounded-2xl divide-y">
+                {uploadResults.failedRecords.map((err, i) => (
+                  <div
+                    key={i}
+                    className="p-3 text-xs flex justify-between bg-white"
+                  >
+                    <span className="font-bold text-slate-700">
+                      {err.identifier}
+                    </span>
+                    <span className="text-red-500 font-medium italic">
+                      {err.reason}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <button
+              onClick={() => setUploadResults(null)}
+              className="w-full mt-4 py-2 text-xs font-bold text-slate-400 uppercase tracking-widest hover:text-slate-600 transition-colors"
+            >
+              Dismiss Report
+            </button>
+          </Card>
+        )}
       </div>
-      <div className="mb-6">
-        <FormInput
-          label="Matriculation Number"
-          icon={Shield}
-          placeholder="UNI/2025/..."
-          value={form.matricNumber}
-          onChange={(e) => setForm({ ...form, matricNumber: e.target.value })}
-        />
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        <FormSelect
-          label="Faculty"
-          icon={Building2}
-          value={form.faculty}
-          onChange={(e) => setForm({ ...form, faculty: e.target.value })}
-        >
-          <option value="">Select Faculty...</option>
-          {faculties.map((f) => (
-            <option key={f.id} value={f.id}>
-              {f.name}
-            </option>
-          ))}
-        </FormSelect>
-        <FormSelect
-          label="Department"
-          icon={Building2}
-          disabled={!form.faculty}
-          value={form.department}
-          onChange={(e) => setForm({ ...form, department: e.target.value })}
-        >
-          <option value="">Select Department...</option>
-          {departments.map((d) => (
-            <option key={d.id} value={d.id}>
-              {d.name}
-            </option>
-          ))}
-        </FormSelect>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-        <FormSelect
-          label="Level"
-          icon={BookOpen}
-          value={form.level}
-          onChange={(e) => setForm({ ...form, level: e.target.value })}
-        >
-          <option>100</option>
-          <option>200</option>
-          <option>300</option>
-          <option>400</option>
-          <option>500</option>
-        </FormSelect>
-        <FormSelect
-          label="Sex"
-          icon={Users}
-          value={form.sex}
-          onChange={(e) => setForm({ ...form, sex: e.target.value })}
-        >
-          <option>Male</option>
-          <option>Female</option>
-        </FormSelect>
-      </div>
-      <div className="flex justify-end">
-        <div className="w-full md:w-1/3">
-          <Button
-            onClick={handleSubmit}
-            loading={loading}
-            colorClass="bg-emerald-600 hover:bg-emerald-700"
-          >
-            <UserPlus size={18} /> Register Student
-          </Button>
+
+      <div className="space-y-6">
+        <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-2xl space-y-6 border border-slate-800">
+          <div className="text-center space-y-2">
+            <div className="w-16 h-16 bg-blue-500/20 text-blue-400 rounded-3xl flex items-center justify-center mx-auto border border-blue-500/30">
+              <FileBarChart size={32} />
+            </div>
+            <h3 className="text-xl font-black">Student Bulk Import</h3>
+            <p className="text-xs text-slate-400">
+              Add multiple students via Excel.
+            </p>
+          </div>
+          <div className="space-y-3">
+            <button
+              onClick={downloadTemplate}
+              className="w-full py-4 bg-slate-800 text-slate-300 rounded-2xl text-xs font-bold uppercase tracking-widest hover:bg-slate-700 transition-all flex items-center justify-center gap-2 border border-slate-700"
+            >
+              <Download size={18} /> Get Excel Template
+            </button>
+            <label className="w-full py-4 bg-blue-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-blue-500 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-blue-900/50">
+              <input
+                type="file"
+                className="hidden"
+                accept=".xlsx, .xls"
+                onChange={handleFileUpload}
+                disabled={bulkLoading}
+              />
+              {bulkLoading ? (
+                <Loader2 className="animate-spin" size={18} />
+              ) : (
+                <>
+                  <ArrowRight size={18} /> Upload Filled Excel
+                </>
+              )}
+            </label>
+          </div>
         </div>
       </div>
-    </Card>
+    </div>
   );
 }
 
@@ -1940,6 +2224,8 @@ function ManageCourses({ currentUser }) {
               <option>300</option>
               <option>400</option>
               <option>500</option>
+              <option>600</option>
+              <option>00</option>
             </FormSelect>
           </div>
         </div>
@@ -2464,24 +2750,26 @@ function ExamOfficerPortal() {
     departments,
   ]);
   // --- LOGIC: Group Duplicate Courses for Dropdown ---
-const uniqueCourses = [];
-const seenKeys = new Set();
+  const uniqueCourses = [];
+  const seenKeys = new Set();
 
-availableCourses.forEach((c) => {
-  // Create a unique key using Code + Department
-  const key = `${c.courseCode}-${c.department}`; 
-  if (!seenKeys.has(key)) {
-    seenKeys.add(key);
-    uniqueCourses.push(c);
+  availableCourses.forEach((c) => {
+    // Create a unique key using Code + Department
+    const key = `${c.courseCode}-${c.department}`;
+    if (!seenKeys.has(key)) {
+      seenKeys.add(key);
+      uniqueCourses.push(c);
+    }
+  });
+
+  // Update the JSX to show the department name in the dropdown
+  {
+    uniqueCourses.map((c) => (
+      <option key={c.id} value={c.id}>
+        {c.courseCode} - {c.courseTitle} ({c.department})
+      </option>
+    ));
   }
-});
-
-// Update the JSX to show the department name in the dropdown
-{uniqueCourses.map((c) => (
-  <option key={c.id} value={c.id}>
-    {c.courseCode} - {c.courseTitle} ({c.department})
-  </option>
-))}
 
   /// 5. GENERATE REPORT
   const generateReport = async () => {
