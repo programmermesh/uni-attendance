@@ -5,28 +5,35 @@ import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 
 import { AttendanceModule } from './attendance/attendance.module';
-import { Student } from './attendance/entities/student.entity';
-import { Lecture } from './attendance/entities/lecture.entity';
-import { Attendance } from './attendance/entities/attendance.entity';
-import { Lecturer } from './attendance/entities/lecturer.entity';
-import { Admin } from './admin/admin.entity';
-import { ExamOfficer } from './exam-officer/exam-officer.entity';
-import { Department } from './school/department.entity';
-import { Faculty } from './school/faculty.entity';
-import { AttendanceSession } from './attendance/entities/attendanceSession.entity';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 
 @Module({
   imports: [
-    TypeOrmModule.forRoot({
-      type: 'postgres',
-      host: 'localhost',
-      port: 5432,
-      username: 'postgres', 
-      password: 'Slag007@', 
-      database: 'university_db',
-      entities: [Student, Lecture, Attendance, Lecturer, Admin, ExamOfficer, Faculty, Department, AttendanceSession],
-      synchronize: true, 
+      ConfigModule.forRoot({
+      isGlobal: true,
     }),
+
+    TypeOrmModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        type: 'postgres',
+        host: configService.get<string>('DB_HOST'),
+        port: configService.get<number>('DB_PORT'),
+        username: configService.get<string>('DB_USERNAME'),
+        password: configService.get<string>('DB_PASSWORD'),
+        database: configService.get<string>('DB_NAME'),
+        entities: [join(__dirname, '**', '*.entity.{ts,js}')],
+        autoLoadEntities: true,
+        synchronize: true,
+        
+        // 3. Conditional SSL setup
+        ssl: configService.get<string>('DB_SSL') === 'true' 
+          ? { rejectUnauthorized: false } 
+          : false,
+      }),
+    }),
+
     // Serve uploaded images publicly so frontend can see them
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', 'uploads'),

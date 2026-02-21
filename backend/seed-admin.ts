@@ -1,23 +1,30 @@
 // Run this with: npx ts-node seed-admin.ts
 import { DataSource } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
-import { Admin } from './src/admin/admin.entity'; // Adjust path if needed
+import { Admin } from './src/admin/admin.entity'; 
+import * as dotenv from 'dotenv';
 
-// ⚙️ CONFIG: Match your app.module.ts database config
+//Load environment variables from .env file
+dotenv.config(); 
+
 const AppDataSource = new DataSource({
   type: 'postgres',
-  host: 'localhost',
-  port: 5432,
-  username: 'postgres',
-  password: 'Slag007@',
-  database: 'university_db',
+  host: process.env.DB_HOST,
+  port: parseInt(process.env.DB_PORT || '5432'),
+  username: process.env.DB_USERNAME,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME,
   entities: [Admin],
+  ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
   synchronize: true,
 });
 
 async function seed() {
-  await AppDataSource.initialize();
-  console.log('📦 Database Connected...');
+  console.log(`Connecting to database: ${process.env.DB_NAME} on ${process.env.DB_HOST}...`);
+  if (!AppDataSource.isInitialized) {
+      await AppDataSource.initialize();
+    }
+    console.log('Database Connected...')
 
   const adminRepo = AppDataSource.getRepository(Admin);
 
@@ -26,7 +33,7 @@ async function seed() {
   const existing = await adminRepo.findOneBy({ email });
 
   if (existing) {
-    console.log('✅ Admin already exists. No action taken.');
+    console.log('Admin already exists. No action taken.');
     process.exit(0);
   }
 
@@ -42,11 +49,11 @@ async function seed() {
   });
 
   await adminRepo.save(newAdmin);
-  console.log('🚀 SUCCESS: Admin User Created!');
-  console.log('📧 Email: admin@uni.edu');
-  console.log('🔑 Pass:  admin123');
+  console.log('SUCCESS: Admin User Created!');
+  console.log('Email: admin@uni.edu');
+  console.log('Pass:  admin123');
 
   process.exit(0);
 }
 
-seed().catch((err) => console.error('❌ Error:', err));
+seed();
