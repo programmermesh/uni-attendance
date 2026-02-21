@@ -22,7 +22,7 @@ import { AttendanceSession } from './attendance/entities/attendanceSession.entit
       host: 'localhost',
       port: 5432,
       username: 'postgres', 
-      password: 'password', 
+      password: 'Slag007@', 
       database: 'university_db',
       entities: [Student, Lecture, Attendance, Lecturer, Admin, ExamOfficer, Faculty, Department, AttendanceSession],
       synchronize: true, 

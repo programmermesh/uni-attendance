@@ -624,4 +624,114 @@ async getAllLectures() {
     order: { courseCode: 'ASC' }
   });
 }
+
+async bulkCreateStudents(students: any[]) {
+  const report = {
+    successfullyCreated: [] as any[],
+    failedRecords: [] as { identifier: string; reason: string }[],
+    successCount: 0,
+    errorCount: 0,
+  };
+
+  for (const s of students) {
+    const matric = s.matricNumber ? String(s.matricNumber).toUpperCase().trim() : null;
+    const fullName = (s.firstName || s.lastName) 
+  ? `${s.firstName || ''} ${s.lastName || ''}`.trim() 
+  : null;
+const rowIdentifier = fullName || matric || `Unknown Row`;
+
+    try {
+      if (!matric) {
+        throw new Error('Matric number is missing in Excel row');
+      }
+
+      // Pre-Check
+      const existing = await this.studentRepo.findOneBy({ matricNumber: matric });
+      if (existing) {
+        throw new Error(`Student with matric ${matric} already exists`);
+      }
+
+      const student = this.studentRepo.create({
+        firstName: s.firstName ? capitalize(String(s.firstName)) : '',
+        lastName: s.lastName ? capitalize(String(s.lastName)) : '',
+        middleName: s.middleName ? capitalize(String(s.middleName)) : '',
+        matricNumber: matric,
+        faculty: s.faculty || '',
+        department: s.department || '',
+        level: s.level ? String(s.level) : '100',
+        sex: s.sex ? (capitalize(String(s.sex)) as 'Male' | 'Female') : 'Male'
+      });
+
+      const saved = await this.studentRepo.save(student);
+      
+      report.successfullyCreated.push(saved);
+      report.successCount++;
+
+    } catch (err) {
+      report.failedRecords.push({
+        identifier: rowIdentifier,
+        reason: err.message,
+      });
+      report.errorCount++;
+    }
+  }
+
+  return report;
 }
+
+async bulkCreateStaff(staffList: any[]) {
+  const salt = await bcrypt.genSalt(10);
+  
+  const report = {
+    successfullyCreated: [] as { email: string; name: string; role: string }[],
+    failedRecords: [] as { email: string; name: string; reason: string }[]
+  };
+
+  for (const s of staffList) {
+    const email = s.email?.toLowerCase().trim();
+    const role = s.role?.toLowerCase().trim();
+
+    try {
+      if (!email || !role) throw new Error('Missing email or role');
+
+      // Pre-check for existing records
+      const [exLec, exAdm, exOff] = await Promise.all([
+        this.lecturerRepo.findOneBy({ email }),
+        this.adminRepo.findOneBy({ email }),
+        this.examRepo.findOneBy({ email }),
+      ]);
+
+      if (exLec || exAdm || exOff) throw new Error('Email already exists');
+
+      const hashedPassword = await bcrypt.hash(s.password || 'password123', salt);
+      
+      if (role === 'lecturer') {
+        await this.lecturerRepo.save(this.lecturerRepo.create({ ...s, email, password: hashedPassword, title: s.title || 'Dr.' }));
+      } else if (role === 'admin') {
+        await this.adminRepo.save(this.adminRepo.create({ ...s, email, password: hashedPassword }));
+      } else if (role === 'exam_officer') {
+        await this.examRepo.save(this.examRepo.create({ ...s, email, password: hashedPassword }));
+      } else {
+        throw new Error(`Invalid role type: ${role}`);
+      }
+
+      report.successfullyCreated.push({
+        email: email,
+        name: `${s.firstName} ${s.lastName}`,
+        role: role
+      });
+
+    } catch (err) {
+      report.failedRecords.push({
+        email: email || 'Unknown',
+        name: `${s.firstName || ''} ${s.lastName || ''}`,
+        reason: err.message
+      });
+    }
+  }
+
+  return report;
+}
+}
+
+
